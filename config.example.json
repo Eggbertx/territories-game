@@ -1,0 +1,241 @@
+{
+	"mapFile": "usa-with-territories.svg",
+	"dbFile": "territories.db",
+	"svgOutFile": "out/map-modified.svg",
+	"pngOutFile": "out/map.png",
+	"maxArmiesPerTerritory": 5,
+	"initialArmies": 3,
+	"minimumNationsToStart": 3,
+	"territories": [
+		{
+			"abbr": "AL",
+			"name": "Alabama",
+			"neighbors": ["MS", "TN", "GA", "FL", "PR", "VI"]
+		}, {
+			"abbr": "AK",
+			"name": "Alaska",
+			"neighbors": ["CA", "AZ", "NM", "HI"]
+		}, {
+			"abbr": "AZ",
+			"name": "Arizona",
+			"neighbors": ["CA", "NV", "UT", "CO", "NM", "HI", "AK"]
+		}, {
+			"abbr": "AR",
+			"name": "Arkansas",
+			"neighbors": ["MO", "TN", "MS", "LA", "TX", "OK"]
+		}, {
+			"abbr": "CA",
+			"name": "California",
+			"neighbors": ["OR", "NV", "AZ", "AK"]
+		}, {
+			"abbr": "CO",
+			"name": "Colorado",
+			"neighbors": ["WY", "NE", "KS", "OK", "NM", "AZ", "UT"]
+		}, {
+			"abbr": "CT",
+			"name": "Connecticut",
+			"neighbors": ["MA", "RI", "NY"]
+		}, {
+			"abbr": "DE",
+			"name": "Delaware",
+			"neighbors": ["PA", "NJ", "MD"]
+		}, {
+			"abbr": "FL",
+			"name": "Florida",
+			"neighbors": ["AL", "GA", "MP", "VI"]
+		}, {
+			"abbr": "GA",
+			"name": "Georgia",
+			"neighbors": ["TN", "NC", "SC", "FL", "AL"]
+		}, {
+			"abbr": "HI",
+			"name": "Hawaii",
+			"aliases": ["Hawai'i"],
+			"neighbors": ["AZ", "NM", "TX", "AK"]
+		}, {
+			"abbr": "ID",
+			"name": "Idaho",
+			"neighbors": ["MT", "WY", "UT", "NV", "OR", "WA"]
+		}, {
+			"abbr": "IL",
+			"name": "Illinois",
+			"neighbors": ["WI", "IN", "KY", "MO", "IA"]
+		}, {
+			"abbr": "IN",
+			"name": "Indiana",
+			"neighbors": ["MI", "OH", "KY", "IL"]
+		}, {
+			"abbr": "IA",
+			"name": "Iowa",
+			"neighbors": ["MN", "WI", "IL", "MO", "NE", "SD"]
+		}, {
+			"abbr": "KS",
+			"name": "Kansas",
+			"neighbors": ["NE", "MO", "OK", "CO"]
+		}, {
+			"abbr": "KY",
+			"name": "Kentucky",
+			"neighbors": ["OH", "WV", "VA", "TN", "MO", "IL", "IN"]
+		}, {
+			"abbr": "LA",
+			"name": "Louisiana",
+			"neighbors": ["AR", "MS", "VI", "PR", "TX"]
+		}, {
+			"abbr": "ME",
+			"name": "Maine",
+			"neighbors": ["NH"]
+		}, {
+			"abbr": "MD",
+			"name": "Maryland",
+			"neighbors": ["PA", "DE", "VA", "DC", "WV"]
+		}, {
+			"abbr": "MA",
+			"name": "Massachusetts",
+			"neighbors": ["VT", "NH", "RI", "CT", "NY"]
+		}, {
+			"abbr": "MI",
+			"name": "Michigan",
+			"neighbors": ["MN", "OH", "IN", "WI"]
+		}, {
+			"abbr": "MN",
+			"name": "Minnesota",
+			"neighbors": ["ND", "SD", "IA", "WI", "MI"]
+		}, {
+			"abbr": "MS",
+			"name": "Mississippi",
+			"neighbors": ["TN", "AL", "PR", "LA", "AR"]
+		}, {
+			"abbr": "MO",
+			"name": "Missouri",
+			"neighbors": ["IA", "IL", "KY", "TN", "AR", "OK", "KS", "NE"]
+		}, {
+			"abbr": "MT",
+			"name": "Montana",
+			"neighbors": ["ID", "WY", "SD", "ND"]
+		}, {
+			"abbr": "NE",
+			"name": "Nebraska",
+			"neighbors": ["SD", "IA", "MO", "KS", "CO", "WY"]
+		}, {
+			"abbr": "NV",
+			"name": "Nevada",
+			"neighbors": ["OR", "ID", "UT", "AZ", "CA"]
+		}, {
+			"abbr": "NH",
+			"name": "New Hampshire",
+			"neighbors": ["ME", "MA", "VT"]
+		}, {
+			"abbr": "NJ",
+			"name": "New Jersey",
+			"neighbors": ["NY", "DE", "PA"]
+		}, {
+			"abbr": "NM",
+			"name": "New Mexico",
+			"neighbors": ["CO", "OK", "TX", "HI", "AK", "AZ", "UT"]
+		}, {
+			"abbr": "NY",
+			"name": "New York",
+			"neighbors": ["VT", "MA", "CT", "NJ", "PA"]
+		}, {
+			"abbr": "NC",
+			"name": "North Carolina",
+			"neighbors": ["VA", "SC", "GA", "TN"]
+		}, {
+			"abbr": "ND",
+			"name": "North Dakota",
+			"neighbors": ["MN", "SD", "MT"]
+		}, {
+			"abbr": "OH",
+			"name": "Ohio",
+			"neighbors": ["PA", "WV", "KY", "IN", "MI"]
+		}, {
+			"abbr": "OK",
+			"name": "Oklahoma",
+			"neighbors": ["KS", "MO", "AR", "TX", "NM", "CO"]
+		}, {
+			"abbr": "OR",
+			"name": "Oregon",
+			"neighbors": ["WA", "ID", "NV", "CA"]
+		}, {
+			"abbr": "PA",
+			"name": "Pennsylvania",
+			"neighbors": ["NY", "NJ", "DE", "MD", "WV", "OH"]
+		}, {
+			"abbr": "RI",
+			"name": "Rhode Island",
+			"neighbors": ["MA", "CT"]
+		}, {
+			"abbr": "SC",
+			"name": "South Carolina",
+			"neighbors": ["NC", "GA"]
+		}, {
+			"abbr": "SD",
+			"name": "South Dakota",
+			"neighbors": ["ND", "MN", "IA", "NE", "WY", "MT"]
+		}, {
+			"abbr": "TN",
+			"name": "Tennessee",
+			"neighbors": ["KY", "VA", "NC", "GA", "AL", "MS", "AR", "MO"]
+		}, {
+			"abbr": "TX",
+			"name": "Texas",
+			"neighbors": ["OK", "AR", "LA", "PR", "GU", "HI", "NM"]
+		}, {
+			"abbr": "UT",
+			"name": "Utah",
+			"neighbors": ["ID", "WY", "CO", "NM", "AZ", "NV"]
+		}, {
+			"abbr": "VT",
+			"name": "Vermont",
+			"neighbors": ["NH", "MA", "NY"]
+		}, {
+			"abbr": "VA",
+			"name": "Virginia",
+			"neighbors": ["WV", "MD", "DC", "NC", "TN", "KY"]
+		}, {
+			"abbr": "WA",
+			"name": "Washington",
+			"neighbors": ["OR", "ID"]
+		}, {
+			"abbr": "WV",
+			"name": "West Virginia",
+			"aliases": ["W Virginia", "W. Virginia"],
+			"neighbors": ["OH", "PA", "MD", "VA", "KY"]
+		}, {
+			"abbr": "WI",
+			"name": "Wisconsin",
+			"neighbors": ["MI", "IL", "IA", "MN"]
+		}, {
+			"abbr": "WY",
+			"name": "Wyoming",
+			"neighbors": ["MT", "SD", "NE", "CO", "UT", "ID"]
+		}, {
+			"abbr": "DC",
+			"name": "Washington D.C.",
+			"aliases": ["Washington DC", "Washington D.C", "District of Columbia", "D.C.", "D.C"],
+			"neighbors": ["MD", "VA"]
+		}, {
+			"abbr": "PR",
+			"name": "Puerto Rico",
+			"neighbors": ["LA", "MS", "AL", "VI", "MP", "AS", "GU", "TX"]
+		}, {
+			"abbr": "VI",
+			"name": "Virgin Islands",
+			"neighbors": ["AL", "FL", "MP", "AS", "PR", "LA"]
+		}, {
+			"abbr": "GU",
+			"name": "Guam",
+			"neighbors": ["PR", "AS", "TX"]
+		}, {
+			"abbr": "AS",
+			"name": "American Samoa",
+			"aliases": ["Samoa", "A Samoa", "A. Samoa"],
+			"neighbors": ["PR", "VI", "MP", "GU"]
+		}, {
+			"abbr": "MP",
+			"name": "Northern Mariana Islands",
+			"aliases": ["N Mariana Islands", "N. Mariana Islands", "North Mariana Islands", "North Mariana", "Northern Mariana"],
+			"neighbors": ["VI", "FL", "AS", "PR"]
+		}
+	]
+}
