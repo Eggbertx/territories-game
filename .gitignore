@@ -31,10 +31,10 @@ go.work.sum
 # .idea/
 # .vscode/
 
-# Territires specific files
+# Territories specific files
 out/
 config.json
-Terrotires-GameManager
+/territories-referee
 *.db
 *.*-journal
 *.log
