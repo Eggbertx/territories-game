@@ -208,7 +208,6 @@ var (
 			},
 		},
 	}
-
 	attackTestCases = []eventsTestCase{
 		{
 			desc: "invalid attack territory",
@@ -364,6 +363,83 @@ var (
 			},
 		},
 	}
+	raiseTestCases = []eventsTestCase{
+		{
+			desc: "valid raise event",
+			events: []GameEvent{
+				{
+					User:      "Test User",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+			},
+			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
+				var armySize int
+				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				assert.Equal(t, 3, armySize)
+			},
+		},
+		{
+			desc: "enforce max raise limit",
+			events: []GameEvent{
+				{
+					User:      "Test User",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
+				assert.ErrorContains(t, err, "cannot raise army size in CA: already at maximum of 5")
+				var armySize int
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				assert.Equal(t, 5, armySize, "expected army size to be capped at 5")
+			},
+		},
+	}
 )
 
 type eventsTestCase struct {
@@ -423,6 +499,14 @@ func TestColorEvent(t *testing.T) {
 
 func TestAttackEvent(t *testing.T) {
 	for _, tc := range attackTestCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			runEventTestCase(t, &tc)
+		})
+	}
+}
+
+func TestRaiseEvent(t *testing.T) {
+	for _, tc := range raiseTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			runEventTestCase(t, &tc)
 		})

@@ -83,8 +83,7 @@ func (ge *GameEvent) DoAction(db *sql.DB) error {
 	case "attack":
 		err = ge.doAttack(db, ge.Subject, ge.Predicate)
 	case "raise":
-		err = errors.New("raise action not implemented yet")
-		ge.logger.Err(err).Caller().Send()
+		err = ge.doRaise(db, ge.Subject)
 	default:
 		err = ErrInvalidAction
 		ge.logger.Err(err).Caller().Send()
@@ -304,12 +303,12 @@ func (ge *GameEvent) doNormalAttack(db *sql.DB, attackingFrom, defendingFrom *co
 		// defending armies destroyed
 		defenderLosses = int(math.Min(losses, float64(defending)))
 		config.LogInt("defenderLosses", defenderLosses, infoEv, errEv)
-		err = ge.updateHoldingArmySize(db, defendingFrom.Abbreviation, defending-defenderLosses, infoEv, errEv)
+		err = ge.updateHoldingArmySize(db, defendingFrom.Abbreviation, defending-defenderLosses, errEv)
 	} else {
 		// attacking armies destroyed
 		attackerLosses = int(math.Min(math.Abs(losses), float64(attacking)))
 		config.LogInt("attackerLosses", attackerLosses, infoEv, errEv)
-		err = ge.updateHoldingArmySize(db, attackingFrom.Abbreviation, attacking-attackerLosses, infoEv, errEv)
+		err = ge.updateHoldingArmySize(db, attackingFrom.Abbreviation, attacking-attackerLosses, errEv)
 	}
 	if err != nil {
 		ge.logger.Err(err).Caller().Msg("Unable to update holding army size")
@@ -327,7 +326,49 @@ func (ge *GameEvent) doAttackWithCounter(db *sql.DB, attackingFrom, defendingFro
 	return err
 }
 
-func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, territory string, size int, infoEv, errEv *zerolog.Event) error {
+func (ge *GameEvent) doRaise(db *sql.DB, territory string) error {
+	infoEv := ge.logger.Info()
+	errEv := ge.logger.Err(nil)
+	defer config.DiscardLogEvents(infoEv, errEv)
+
+	config.LogString("territory", territory, infoEv, errEv)
+	if territory == "" {
+		ge.logger.Err(ErrNoTargetState).Caller().Send()
+		return ErrNoTargetState
+	}
+
+	stmt, err := db.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
+	if err != nil {
+		ge.logger.Err(err).Caller().Msg("Unable to prepare raise check statement")
+		return err
+	}
+	defer stmt.Close()
+
+	var armySize int
+	if err = stmt.QueryRow(territory, ge.User).Scan(&armySize); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = fmt.Errorf("no armies in %s controlled by %s to raise", territory, ge.User)
+		}
+		ge.logger.Err(err).Caller().Send()
+		return err
+	}
+
+	cfg, _ := config.GetConfig()
+	if armySize == cfg.MaxArmiesPerTerritory {
+		err = fmt.Errorf("cannot raise army size in %s: already at maximum of %d", territory, cfg.MaxArmiesPerTerritory)
+		ge.logger.Err(err).Caller().Send()
+		return err
+	}
+
+	if err = ge.updateHoldingArmySize(db, territory, armySize+1, errEv); err != nil {
+		return err
+	}
+
+	infoEv.Msg("Raised army size")
+	return nil
+}
+
+func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, territory string, size int, errEv *zerolog.Event) error {
 	const updateSizeSQL = `UPDATE holdings SET army_size = ? WHERE territory = ?`
 	const destroyedSQL = `DELETE FROM holdings WHERE territory = ?`
 	var stmt *sql.Stmt
