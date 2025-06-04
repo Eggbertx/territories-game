@@ -55,7 +55,7 @@ func GetDB() (*sql.DB, error) {
 			return nil, err
 		}
 		if err = ProvisionDB(db); err != nil {
-			// db.Close()
+			db.Close()
 			return nil, err
 		}
 	}

@@ -24,6 +24,7 @@ var (
 	ErrPlayerAlreadyJoined      = errors.New("the player already joined")
 	ErrNationAlreadyJoined      = errors.New("a nation with the given name already exists")
 	ErrTerritoryAlreadyOccupied = errors.New("the territory is already occupied")
+	ErrColorInUse               = errors.New("color already in use by another player")
 )
 
 type GameEvent struct {
@@ -33,15 +34,6 @@ type GameEvent struct {
 	Predicate string
 
 	logger zerolog.Logger
-}
-
-func NewEvent(user, action, subject, predicate string) *GameEvent {
-	return &GameEvent{
-		User:      user,
-		Action:    action,
-		Subject:   subject,
-		Predicate: predicate,
-	}
 }
 
 func (ge *GameEvent) DoAction(db *sql.DB) error {
@@ -58,13 +50,25 @@ func (ge *GameEvent) DoAction(db *sql.DB) error {
 		return ErrMissingUser
 	}
 	if ge.Action != "join" {
-		var user string
-		if err = db.QueryRow(`SELECT player FROM nations WHERE player = ?`, ge.User).Scan(&user); err != nil {
+		var countryName string
+		stmt, err := db.Prepare("SELECT country_name FROM nations WHERE player = ?")
+		if err != nil {
+			ge.logger.Err(err).Caller().Msg("Unable to prepare user check statement")
+			return err
+		}
+		defer stmt.Close()
+
+		if err = stmt.QueryRow(ge.User).Scan(&countryName); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				ge.logger.Err(ErrUserNotRegistered).Caller().Send()
 				return ErrUserNotRegistered
 			}
 			ge.logger.Err(err).Caller().Msg("Unable to check if user is registered")
+			return err
+		}
+
+		if err = stmt.Close(); err != nil {
+			ge.logger.Err(err).Caller().Msg("Unable to close user check statement")
 			return err
 		}
 	}
@@ -102,37 +106,15 @@ func (ge *GameEvent) doColor(db *sql.DB, color string) error {
 	parsedColor.A = 1.0 // Ensure the color is fully opaque
 	color = strings.TrimPrefix(parsedColor.Clamp().HexString(), "#")
 
-	const colorInUseSQL = `SELECT COUNT(*) FROM nations WHERE color = ? AND player <> ?`
-	const colorUpdateSQL = `UPDATE nations SET color = ? WHERE player = ?`
-	stmt, err := db.Prepare(colorInUseSQL)
+	stmt, err := db.Prepare("UPDATE nations SET color = ? WHERE player = ?")
 	if err != nil {
-		errEv.Err(err).Caller().Msg("Unable to prepare color update statement")
-		return err
-	}
-	defer stmt.Close()
-
-	var count int
-	if err = stmt.QueryRow(color, ge.User).Scan(&count); err != nil {
-		errEv.Err(err).Caller().Msg("Unable to check if color is in use")
-		return err
-	}
-	if count > 0 {
-		errEv.Err(fmt.Errorf("color %q is already in use by another player", color)).Caller().Send()
-		return errors.New("color already in use by another player")
-	}
-	if err = stmt.Close(); err != nil {
-		errEv.Err(err).Caller().Msg("Unable to close color update statement")
-		return err
-	}
-
-	if stmt, err = db.Prepare(colorUpdateSQL); err != nil {
 		errEv.Err(err).Caller().Msg("Unable to prepare color update statement")
 		return err
 	}
 	defer stmt.Close()
 	if _, err = stmt.Exec(color, ge.User); err != nil {
 		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
-			err = errors.New("color already in use by another player")
+			err = ErrColorInUse
 		}
 		errEv.Err(err).Caller().Msg("Unable to update nation color")
 		return err
@@ -221,50 +203,91 @@ func (ge *GameEvent) doJoin(db *sql.DB, nation string, territory string) error {
 
 func (ge *GameEvent) doAttack(db *sql.DB, attacker, defender string) error {
 	cfg, _ := config.GetConfig()
-	if cfg.DoCounterattack {
-		return ge.doAttackWithCounter(db, attacker, defender)
-	}
-	return ge.doNormalAttack(db, attacker, defender)
 
+	attackingTerritory, err := cfg.ResolveTerritory(attacker)
+	if err != nil {
+		ge.logger.Err(err).Caller().Send()
+		return err
+	}
+
+	defendingTerritory, err := cfg.ResolveTerritory(defender)
+	if err != nil {
+		ge.logger.Err(err).Caller().Send()
+		return err
+	}
+
+	if attackingTerritory.Abbreviation == defendingTerritory.Abbreviation {
+		err = fmt.Errorf("cannot attack %s from %s: friendly fire not allowed", defendingTerritory.Name, attackingTerritory.Name)
+		ge.logger.Err(err).Caller().Send()
+		return err
+	}
+
+	neighbors, err := attackingTerritory.IsNeighboring(defender)
+	if err != nil {
+		ge.logger.Err(err).Caller().Send()
+		return err
+	}
+	if !neighbors {
+		err = fmt.Errorf("cannot attack %s from %s: not a neighboring territory", defendingTerritory.Name, attackingTerritory.Name)
+		ge.logger.Err(err).Caller().Send()
+		return err
+	}
+
+	if cfg.DoCounterattack {
+		return ge.doAttackWithCounter(db, attackingTerritory, defendingTerritory)
+	}
+	return ge.doNormalAttack(db, attackingTerritory, defendingTerritory)
 }
 
-func (ge *GameEvent) doNormalAttack(db *sql.DB, attackingFrom, defendingFrom string) error {
+// doNormalAttack calculates the result and losses of a normal attack, based on a dice roll and the difference in army sizes
+func (ge *GameEvent) doNormalAttack(db *sql.DB, attackingFrom, defendingFrom *config.Territory) error {
 	infoEv := ge.logger.Info()
 	errEv := ge.logger.Err(nil)
 	defer config.DiscardLogEvents(infoEv, errEv)
-	cfg, _ := config.GetConfig()
-	config.LogString("attackingTerritory", attackingFrom, infoEv, errEv)
-	config.LogString("defendingTerritory", defendingFrom, infoEv, errEv)
-
-	attackingTerritory, err := cfg.ResolveTerritory(attackingFrom)
-	if err != nil {
-		ge.logger.Err(err).Caller().Send()
-	}
-	defendingTerritory, err := cfg.ResolveTerritory(defendingFrom)
-	if err != nil {
-		ge.logger.Err(err).Caller().Send()
-	}
+	config.LogString("attackingTerritory", attackingFrom.Name, infoEv, errEv)
+	config.LogString("defendingTerritory", defendingFrom.Name, infoEv, errEv)
 
 	var attacking, defending int
-	const attackSQL = `SELECT army_size FROM holdings WHERE territory = ?`
-	err = db.QueryRow(attackSQL+"  AND player = ?", attackingTerritory.Abbreviation, ge.User).Scan(&attacking)
+	const attackSQL = `SELECT army_size FROM v_nation_holdings WHERE territory = ?`
+	stmt, err := db.Prepare(attackSQL + "  AND player = ?")
+	if err != nil {
+		ge.logger.Err(err).Caller().Msg("Unable to prepare attack query")
+		return err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow(attackingFrom.Abbreviation, ge.User).Scan(&attacking)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		ge.logger.Err(err).Caller().Msg("Unable to get attacking army size")
 		return err
 	}
 	if attacking == 0 {
-		err = fmt.Errorf("no armies in %q controlled by %q to attack with", attackingTerritory.Name, ge.User)
+		err = fmt.Errorf("no armies in %s controlled by %s to attack with", attackingFrom.Name, ge.User)
 		ge.logger.Err(err).Caller().Send()
+		return err
 	}
 
-	err = db.QueryRow(attackSQL, defendingTerritory.Abbreviation).Scan(&defending)
+	if err = stmt.Close(); err != nil {
+		ge.logger.Err(err).Caller().Msg("Unable to close statement")
+		return err
+	}
+
+	stmt, err = db.Prepare(attackSQL)
+	if err != nil {
+		ge.logger.Err(err).Caller().Msg("Unable to prepare defending query")
+		return err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow(defendingFrom.Abbreviation).Scan(&defending)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		ge.logger.Err(err).Caller().Msg("Unable to get defending army size")
 		return err
 	}
 	if defending == 0 {
-		err = fmt.Errorf("no armies in %s", defendingTerritory.Name)
+		err = fmt.Errorf("no armies in %s", defendingFrom.Name)
 		ge.logger.Err(err).Caller().Send()
+		return err
 	}
 
 	x := rand.Intn(20) + 1
@@ -280,18 +303,24 @@ func (ge *GameEvent) doNormalAttack(db *sql.DB, attackingFrom, defendingFrom str
 	if losses > 0 {
 		// defending armies destroyed
 		defenderLosses = int(math.Min(losses, float64(defending)))
-		infoEv.Int("defenderLosses", defenderLosses)
-
+		config.LogInt("defenderLosses", defenderLosses, infoEv, errEv)
+		err = ge.updateHoldingArmySize(db, defendingFrom.Abbreviation, defending-defenderLosses, infoEv, errEv)
 	} else {
 		// attacking armies destroyed
 		attackerLosses = int(math.Min(math.Abs(losses), float64(attacking)))
-		infoEv.Int("attackerLosses", attackerLosses)
+		config.LogInt("attackerLosses", attackerLosses, infoEv, errEv)
+		err = ge.updateHoldingArmySize(db, attackingFrom.Abbreviation, attacking-attackerLosses, infoEv, errEv)
+	}
+	if err != nil {
+		ge.logger.Err(err).Caller().Msg("Unable to update holding army size")
 	}
 
 	return err
 }
 
-func (ge *GameEvent) doAttackWithCounter(db *sql.DB, attackingFrom, defendingFrom string) error {
+// doAttackWithCounter handles an attack where the defender automatically counterattacks, based on formulas reverse engineered
+// from Advance Wars.
+func (ge *GameEvent) doAttackWithCounter(db *sql.DB, attackingFrom, defendingFrom *config.Territory) error {
 	// do attack and defender automatically counterattacks using damage calculation from Advance Wars
 	err := errors.New("attack with counterattack not implemented yet")
 	ge.logger.Err(err).Caller().Send()
@@ -301,11 +330,28 @@ func (ge *GameEvent) doAttackWithCounter(db *sql.DB, attackingFrom, defendingFro
 func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, territory string, size int, infoEv, errEv *zerolog.Event) error {
 	const updateSizeSQL = `UPDATE holdings SET army_size = ? WHERE territory = ?`
 	const destroyedSQL = `DELETE FROM holdings WHERE territory = ?`
+	var stmt *sql.Stmt
+	defer func() {
+		if stmt != nil {
+			stmt.Close()
+		}
+	}()
 	var err error
 	if size > 0 {
-		_, err = db.Exec(updateSizeSQL, size, territory)
+		stmt, err = db.Prepare(updateSizeSQL)
+		if err != nil {
+			errEv.Err(err).Caller().Msg("Unable to prepare update holding army size statement")
+			return err
+		}
+		_, err = stmt.Exec(size, territory)
 	} else {
-		_, err = db.Exec(destroyedSQL, territory)
+		stmt, err = db.Prepare(destroyedSQL)
+		if err != nil {
+			errEv.Err(err).Caller().Msg("Unable to prepare delete holding statement")
+			return err
+		}
+		defer stmt.Close()
+		_, err = stmt.Exec(territory)
 	}
 	if err != nil {
 		errEv.Err(err).Caller().Msg("Unable to update holding army size")

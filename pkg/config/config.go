@@ -34,11 +34,13 @@ func (tc *Config) ResolveTerritory(query string) (*Territory, error) {
 		abbrLower := strings.ToLower(territory.Abbreviation)
 		nameLower := strings.ToLower(territory.Name)
 		if abbrLower == queryLower || queryLower == nameLower {
+			tc.Territories[t].cfg = tc
 			return &tc.Territories[t], nil
 		}
 		for _, alias := range territory.Aliases {
 			aliasLower := strings.ToLower(alias)
 			if queryLower == aliasLower {
+				tc.Territories[t].cfg = tc
 				return &tc.Territories[t], nil
 			}
 		}

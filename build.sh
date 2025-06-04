@@ -12,7 +12,7 @@ if [ -z "$1" ] || [ "$1" == "build" ]; then
 elif [ "$1" == "test" ]; then
   go test -cover ./...
 elif [ $1 == "clean" ]; then
-  rm -fv $OUT
+  rm -fv out/map*
 else
   echo "Invalid argument. Use 'build', 'test', or 'clean'"
 fi

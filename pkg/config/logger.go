@@ -32,6 +32,12 @@ func LogString(key string, val string, ev ...*zerolog.Event) {
 	}
 }
 
+func LogInt(key string, val int, ev ...*zerolog.Event) {
+	for _, e := range ev {
+		e.Int(key, val)
+	}
+}
+
 func InitLogger(printJSON bool) error {
 	consolePrintJSON = printJSON
 	var err error
