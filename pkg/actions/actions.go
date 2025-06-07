@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
@@ -49,46 +50,74 @@ func (ge *GameEvent) DoAction(db *sql.DB) error {
 		ge.logger.Err(ErrMissingUser).Caller().Send()
 		return ErrMissingUser
 	}
-	if ge.Action != "join" {
-		var countryName string
-		stmt, err := db.Prepare("SELECT country_name FROM nations WHERE player = ?")
-		if err != nil {
-			ge.logger.Err(err).Caller().Msg("Unable to prepare user check statement")
-			return err
-		}
-		defer stmt.Close()
-
-		if err = stmt.QueryRow(ge.User).Scan(&countryName); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				ge.logger.Err(ErrUserNotRegistered).Caller().Send()
-				return ErrUserNotRegistered
-			}
-			ge.logger.Err(err).Caller().Msg("Unable to check if user is registered")
-			return err
-		}
-
-		if err = stmt.Close(); err != nil {
-			ge.logger.Err(err).Caller().Msg("Unable to close user check statement")
-			return err
-		}
-	}
 	switch ge.Action {
 	case "join":
 		err = ge.doJoin(db, ge.Subject, ge.Predicate)
 	case "color":
+		if err = ge.validateUser(db); err != nil {
+			ge.logger.Err(err).Caller().Send()
+			return err
+		}
 		err = ge.doColor(db, ge.Subject)
 	case "move":
-		err = errors.New("move action not implemented yet")
-		ge.logger.Err(err).Caller().Send()
+		if err = ge.validateUser(db); err != nil {
+			ge.logger.Err(err).Caller().Send()
+			return err
+		}
+		sourceTerritoryStr := ge.Subject
+		colonIndex := strings.LastIndex(ge.Subject, ":")
+		var moveArmies int
+		if colonIndex > 0 {
+			sourceTerritoryStr = ge.Subject[:colonIndex]
+			moveArmies, err = strconv.Atoi(ge.Subject[colonIndex+1:])
+			if err != nil {
+				ge.logger.Err(err).Caller().Msg("Invalid move armies count")
+				return err
+			}
+		}
+		err = ge.doMove(db, sourceTerritoryStr, moveArmies, ge.Predicate)
 	case "attack":
+		if err = ge.validateUser(db); err != nil {
+			ge.logger.Err(err).Caller().Send()
+			return err
+		}
 		err = ge.doAttack(db, ge.Subject, ge.Predicate)
 	case "raise":
+		if err = ge.validateUser(db); err != nil {
+			ge.logger.Err(err).Caller().Send()
+			return err
+		}
 		err = ge.doRaise(db, ge.Subject)
 	default:
 		err = ErrInvalidAction
 		ge.logger.Err(err).Caller().Send()
 	}
 	return err
+}
+
+func (ge *GameEvent) validateUser(db *sql.DB) error {
+	var countryName string
+	stmt, err := db.Prepare("SELECT country_name FROM nations WHERE player = ?")
+	if err != nil {
+		ge.logger.Err(err).Caller().Msg("Unable to prepare user check statement")
+		return err
+	}
+	defer stmt.Close()
+
+	if err = stmt.QueryRow(ge.User).Scan(&countryName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			ge.logger.Err(ErrUserNotRegistered).Caller().Send()
+			return ErrUserNotRegistered
+		}
+		ge.logger.Err(err).Caller().Msg("Unable to check if user is registered")
+		return err
+	}
+
+	if err = stmt.Close(); err != nil {
+		ge.logger.Err(err).Caller().Msg("Unable to close user check statement")
+		return err
+	}
+	return nil
 }
 
 func (ge *GameEvent) doColor(db *sql.DB, color string) error {
@@ -303,12 +332,12 @@ func (ge *GameEvent) doNormalAttack(db *sql.DB, attackingFrom, defendingFrom *co
 		// defending armies destroyed
 		defenderLosses = int(math.Min(losses, float64(defending)))
 		config.LogInt("defenderLosses", defenderLosses, infoEv, errEv)
-		err = ge.updateHoldingArmySize(db, defendingFrom.Abbreviation, defending-defenderLosses, errEv)
+		err = ge.updateHoldingArmySize(db, nil, defendingFrom.Abbreviation, defending-defenderLosses, errEv)
 	} else {
 		// attacking armies destroyed
 		attackerLosses = int(math.Min(math.Abs(losses), float64(attacking)))
 		config.LogInt("attackerLosses", attackerLosses, infoEv, errEv)
-		err = ge.updateHoldingArmySize(db, attackingFrom.Abbreviation, attacking-attackerLosses, errEv)
+		err = ge.updateHoldingArmySize(db, nil, attackingFrom.Abbreviation, attacking-attackerLosses, errEv)
 	}
 	if err != nil {
 		ge.logger.Err(err).Caller().Msg("Unable to update holding army size")
@@ -326,15 +355,159 @@ func (ge *GameEvent) doAttackWithCounter(db *sql.DB, attackingFrom, defendingFro
 	return err
 }
 
-func (ge *GameEvent) doRaise(db *sql.DB, territory string) error {
+func (ge *GameEvent) doMove(db *sql.DB, sourceTerritoryStr string, moveArmies int, destTerritoryStr string) error {
+	infoEv := ge.logger.Info()
+	errEv := ge.logger.Err(nil)
+	defer config.DiscardLogEvents(infoEv, errEv)
+	config.LogString("sourceTerritory", sourceTerritoryStr, infoEv, errEv)
+	config.LogString("destTerritory", destTerritoryStr, infoEv, errEv)
+	if moveArmies > 0 {
+		config.LogInt("moveArmies", moveArmies, infoEv, errEv)
+	}
+
+	if destTerritoryStr == "" || sourceTerritoryStr == destTerritoryStr {
+		errEv.Err(ErrNoTargetState).Caller().Send()
+		return ErrNoTargetState
+	}
+
+	cfg, err := config.GetConfig()
+	if err != nil {
+		errEv.Caller().Msg("Unable to get configuration")
+		return err
+	}
+
+	sourceTerritory, err := cfg.ResolveTerritory(sourceTerritoryStr)
+	if err != nil {
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+	destTerritory, err := cfg.ResolveTerritory(destTerritoryStr)
+	if err != nil {
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+
+	isNeighboring, err := sourceTerritory.IsNeighboring(destTerritoryStr)
+	if err != nil {
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+	if !isNeighboring {
+		err = fmt.Errorf("cannot move from %s to %s: not a neighboring territory", sourceTerritory.Name, destTerritory.Name)
+		errEv.Err(err).Caller().Send()
+	}
+
+	var armiesInSourceTerritory, armiesInDestTerritory int
+	var fromPlayer, destinationPlayer string
+	const moveSQL = "SELECT army_size, player FROM v_nation_holdings WHERE territory = ?"
+	stmt, err := db.Prepare(moveSQL)
+	if err != nil {
+		errEv.Err(err).Caller().Msg("Unable to prepare move query")
+		return err
+	}
+	defer stmt.Close()
+	err = stmt.QueryRow(sourceTerritory.Abbreviation).Scan(&armiesInSourceTerritory, &fromPlayer)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = fmt.Errorf("no armies in %s controlled by %s to move", sourceTerritory.Name, ge.User)
+		}
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+
+	if moveArmies > 0 && moveArmies > armiesInSourceTerritory {
+		err = fmt.Errorf("cannot move %d armies from %s: only %d available", moveArmies, sourceTerritory.Name, armiesInSourceTerritory)
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+	if moveArmies <= 0 {
+		moveArmies = armiesInSourceTerritory // none specified, move all armies in source territory
+		config.LogInt("moveArmies", moveArmies, infoEv, errEv)
+	}
+
+	err = stmt.QueryRow(destTerritory.Abbreviation).Scan(&armiesInDestTerritory, &destinationPlayer)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+
+	if fromPlayer != ge.User {
+		err = fmt.Errorf("cannot move from %s: no armies controlled by player", sourceTerritory.Name)
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+
+	if armiesInDestTerritory > 0 && destinationPlayer != ge.User {
+		err = ErrTerritoryAlreadyOccupied
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+
+	if armiesInDestTerritory+moveArmies > cfg.MaxArmiesPerTerritory {
+		err = fmt.Errorf("cannot move %d armies to %s: would exceed maximum of %d", moveArmies, destTerritory.Name, cfg.MaxArmiesPerTerritory)
+		errEv.Err(err).Caller().Send()
+		return err
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		errEv.Err(err).Caller().Msg("Unable to begin transaction")
+		return err
+	}
+	defer tx.Rollback()
+
+	if err = ge.updateHoldingArmySize(db, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-moveArmies, errEv); err != nil {
+		return err
+	}
+	if armiesInDestTerritory == 0 {
+		stmt, err := tx.Prepare(`INSERT INTO holdings (nation_id, territory, army_size) VALUES(
+			(SELECT id FROM nations WHERE player = ?),
+			?, ?)`)
+		if err != nil {
+			errEv.Err(err).Caller().Msg("Unable to prepare insert holding statement")
+			return err
+		}
+		defer stmt.Close()
+		if _, err = stmt.Exec(ge.User, destTerritory.Abbreviation, moveArmies); err != nil {
+			errEv.Err(err).Caller().Msg("Unable to insert new holding")
+			return err
+		}
+	} else {
+		if err = ge.updateHoldingArmySize(db, tx, destTerritory.Abbreviation, armiesInDestTerritory+moveArmies, errEv); err != nil {
+			return err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		errEv.Err(err).Caller().Msg("Unable to commit transaction")
+		return err
+	}
+	infoEv.Msg("Moved armies")
+
+	return nil
+}
+
+func (ge *GameEvent) doRaise(db *sql.DB, territoryStr string) error {
 	infoEv := ge.logger.Info()
 	errEv := ge.logger.Err(nil)
 	defer config.DiscardLogEvents(infoEv, errEv)
 
-	config.LogString("territory", territory, infoEv, errEv)
-	if territory == "" {
+	config.LogString("territory", territoryStr, infoEv, errEv)
+	if territoryStr == "" {
 		ge.logger.Err(ErrNoTargetState).Caller().Send()
 		return ErrNoTargetState
+	}
+
+	cfg, err := config.GetConfig()
+	if err != nil {
+		errEv.Caller().Msg("Unable to get configuration")
+		return err
+	}
+
+	territory, err := cfg.ResolveTerritory(territoryStr)
+	if err != nil {
+		errEv.Err(err).Caller().Send()
+		return err
 	}
 
 	stmt, err := db.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
@@ -345,22 +518,21 @@ func (ge *GameEvent) doRaise(db *sql.DB, territory string) error {
 	defer stmt.Close()
 
 	var armySize int
-	if err = stmt.QueryRow(territory, ge.User).Scan(&armySize); err != nil {
+	if err = stmt.QueryRow(territory.Abbreviation, ge.User).Scan(&armySize); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			err = fmt.Errorf("no armies in %s controlled by %s to raise", territory, ge.User)
+			err = fmt.Errorf("no armies in %s controlled by %s to raise", territory.Name, ge.User)
 		}
 		ge.logger.Err(err).Caller().Send()
 		return err
 	}
 
-	cfg, _ := config.GetConfig()
 	if armySize == cfg.MaxArmiesPerTerritory {
-		err = fmt.Errorf("cannot raise army size in %s: already at maximum of %d", territory, cfg.MaxArmiesPerTerritory)
+		err = fmt.Errorf("cannot raise army size in %s: already at maximum of %d", territory.Name, cfg.MaxArmiesPerTerritory)
 		ge.logger.Err(err).Caller().Send()
 		return err
 	}
 
-	if err = ge.updateHoldingArmySize(db, territory, armySize+1, errEv); err != nil {
+	if err = ge.updateHoldingArmySize(db, nil, territory.Abbreviation, armySize+1, errEv); err != nil {
 		return err
 	}
 
@@ -368,25 +540,29 @@ func (ge *GameEvent) doRaise(db *sql.DB, territory string) error {
 	return nil
 }
 
-func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, territory string, size int, errEv *zerolog.Event) error {
+func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, errEv *zerolog.Event) error {
 	const updateSizeSQL = `UPDATE holdings SET army_size = ? WHERE territory = ?`
 	const destroyedSQL = `DELETE FROM holdings WHERE territory = ?`
 	var stmt *sql.Stmt
-	defer func() {
-		if stmt != nil {
-			stmt.Close()
-		}
-	}()
 	var err error
 	if size > 0 {
-		stmt, err = db.Prepare(updateSizeSQL)
+		if tx == nil {
+			stmt, err = db.Prepare(updateSizeSQL)
+		} else {
+			stmt, err = tx.Prepare(updateSizeSQL)
+		}
 		if err != nil {
 			errEv.Err(err).Caller().Msg("Unable to prepare update holding army size statement")
 			return err
 		}
+		defer stmt.Close()
 		_, err = stmt.Exec(size, territory)
 	} else {
-		stmt, err = db.Prepare(destroyedSQL)
+		if tx == nil {
+			stmt, err = db.Prepare(destroyedSQL)
+		} else {
+			stmt, err = tx.Prepare(destroyedSQL)
+		}
 		if err != nil {
 			errEv.Err(err).Caller().Msg("Unable to prepare delete holding statement")
 			return err

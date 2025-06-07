@@ -204,9 +204,6 @@ func GetTestingConfig() (*Config, error) {
 }
 
 func CloseTestingConfig(t *testing.T) {
-	if !testing.Testing() {
-		panic("CloseTestingConfig should only be called in testing mode")
-	}
 	if cfg != nil {
 		dir := path.Dir(cfg.MapFile)
 		if err := os.RemoveAll(dir); err != nil {

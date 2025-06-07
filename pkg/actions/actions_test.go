@@ -88,6 +88,43 @@ var (
 				assert.NotEmpty(t, nationName, "expected country name to not be empty")
 			},
 		},
+		{
+			desc: "reject join, territory already occupied",
+			events: []GameEvent{
+				{
+					User:      "Test User 1",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:      "Test User 2",
+					Action:    "join",
+					Subject:   "Nation 2",
+					Predicate: "CA",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				if err == nil {
+					t.FailNow()
+				}
+				assert.ErrorIs(t, err, ErrTerritoryAlreadyOccupied)
+
+				var nationCount int
+				err = d.QueryRow("SELECT COUNT(*) FROM nations WHERE player = 'Test User 1'").Scan(&nationCount)
+				if !assert.NoError(t, err, "failed to query for Test User 1's nation") {
+					t.FailNow()
+				}
+				assert.Equal(t, 1, nationCount, "expected Test User 1 to have one nation")
+
+				err = d.QueryRow("SELECT COUNT(*) FROM nations WHERE player = 'Test User 2'").Scan(&nationCount)
+				if !assert.NoError(t, err, "failed to query for Test User 2's nation") {
+					t.FailNow()
+				}
+				assert.Equal(t, 0, nationCount, "expected Test User 2 to not have a nation due to occupation of CA by Test User 1")
+			},
+		},
 	}
 	colorTestCases = []eventsTestCase{
 		{
@@ -207,6 +244,24 @@ var (
 				assert.NotEqual(t, "ffffff", color, "expected Test User 2's color to not be changed to Test User 1's color")
 			},
 		},
+		{
+			desc: "reject unregistered user",
+			events: []GameEvent{
+				{
+					User:    "Unregistered User",
+					Action:  "color",
+					Subject: "ffffff",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				assert.ErrorIs(t, err, ErrUserNotRegistered)
+
+				var color string
+				err = d.QueryRow("SELECT color FROM nations WHERE player = 'Unregistered User'").Scan(&color)
+				assert.ErrorIs(t, err, sql.ErrNoRows)
+			},
+		},
 	}
 	attackTestCases = []eventsTestCase{
 		{
@@ -248,6 +303,25 @@ var (
 			expectError: true,
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
 				assert.ErrorContains(t, err, "friendly fire not allowed")
+			},
+		},
+		{
+			desc: "reject attack from unregistered user",
+			events: []GameEvent{
+				{
+					User:      "Unregistered User",
+					Action:    "attack",
+					Subject:   "CA",
+					Predicate: "NV",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				assert.ErrorIs(t, err, ErrUserNotRegistered)
+
+				var armySize int
+				err = d.QueryRow("SELECT army_size FROM holdings WHERE territory = 'CA'").Scan(&armySize)
+				assert.ErrorIs(t, err, sql.ErrNoRows, "expected no armies in CA due to unregistered user attack")
 			},
 		},
 		{
@@ -430,13 +504,159 @@ var (
 			},
 			expectError: true,
 			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
-				assert.ErrorContains(t, err, "cannot raise army size in CA: already at maximum of 5")
+				assert.ErrorContains(t, err, "cannot raise army size in California: already at maximum of 5")
 				var armySize int
 				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
 				if !assert.NoError(t, err) {
 					t.FailNow()
 				}
 				assert.Equal(t, 5, armySize, "expected army size to be capped at 5")
+			},
+		},
+		{
+			desc: "raise in unowned territory",
+			events: []GameEvent{
+				{
+					User:      "Test User",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "NV",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
+				assert.ErrorContains(t, err, "no armies in Nevada controlled by Test User to raise")
+				var armySize int
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'NV'").Scan(&armySize)
+				assert.ErrorIs(t, err, sql.ErrNoRows, "expected no armies in NV since it is unowned")
+			},
+		},
+		{
+			desc: "raise from unregistered user",
+			events: []GameEvent{
+				{
+					User:    "Unregistered User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
+				assert.ErrorIs(t, err, ErrUserNotRegistered)
+
+				var armySize int
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				assert.ErrorIs(t, err, sql.ErrNoRows, "expected no armies in CA since Unregistered User cannot raise armies")
+			},
+		},
+	}
+	moveTestCases = []eventsTestCase{
+		{
+			desc: "valid move event (all units)",
+			events: []GameEvent{
+				{
+					User:      "Test User",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:      "Test User",
+					Action:    "move",
+					Subject:   "CA",
+					Predicate: "NV",
+				},
+			},
+			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
+				var armySize int
+				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				assert.ErrorIs(t, err, sql.ErrNoRows, "expected no units left in CA after move")
+				assert.Equal(t, 0, armySize, "expected all units to be moved from CA")
+
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'NV'").Scan(&armySize)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				assert.Equal(t, 2, armySize, "expected one unit to be moved to NV")
+			},
+		},
+		{
+			desc: "valid move event (some units)",
+			events: []GameEvent{
+				{
+					User:      "Test User",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:      "Test User",
+					Action:    "move",
+					Subject:   "CA:1",
+					Predicate: "NV",
+				},
+			},
+			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
+				var armySize int
+				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				assert.Equal(t, 1, armySize, "expected one unit left in CA after move")
+
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'NV'").Scan(&armySize)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				assert.Equal(t, 1, armySize, "expected one unit to be moved to NV")
+			},
+		},
+		{
+			desc: "territory already occupied",
+			events: []GameEvent{
+				{
+					User:      "Test User",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:      "Test User 2",
+					Action:    "join",
+					Subject:   "Nation 2",
+					Predicate: "NV",
+				},
+				{
+					User:      "Test User",
+					Action:    "move",
+					Subject:   "CA",
+					Predicate: "NV",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
+				assert.ErrorIs(t, err, ErrTerritoryAlreadyOccupied)
+				var armySize int
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				assert.Equal(t, 1, armySize, "expected no units moved from CA due to occupation of NV")
 			},
 		},
 	}
@@ -481,6 +701,40 @@ func runEventTestCase(t *testing.T, tc *eventsTestCase) {
 	}
 }
 
+func TestInvalidAction(t *testing.T) {
+	invalidEvent := GameEvent{
+		User:      "Test User",
+		Action:    "test",
+		Subject:   "Nation 1",
+		Predicate: "CA",
+	}
+	_, err := config.GetTestingConfig()
+	if !assert.NoError(t, err) {
+		t.FailNow()
+	}
+	defer config.CloseTestingConfig(t)
+
+	// db, err := db.GetDB()
+	// if !assert.NoError(t, err) {
+	// 	t.FailNow()
+	// }
+	// defer db.Close()
+
+	// Action should be rejected (no user specified)
+	err = invalidEvent.DoAction(nil)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidAction)
+
+	invalidEvent = GameEvent{
+		Action:    "join",
+		Subject:   "Test Nation",
+		Predicate: "CA",
+	}
+	err = invalidEvent.DoAction(nil)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrMissingUser)
+}
+
 func TestJoinEvent(t *testing.T) {
 	for _, tc := range joinTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -507,6 +761,14 @@ func TestAttackEvent(t *testing.T) {
 
 func TestRaiseEvent(t *testing.T) {
 	for _, tc := range raiseTestCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			runEventTestCase(t, &tc)
+		})
+	}
+}
+
+func TestMoveEvent(t *testing.T) {
+	for _, tc := range moveTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			runEventTestCase(t, &tc)
 		})
