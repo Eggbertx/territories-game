@@ -34,10 +34,6 @@ func main() {
 	flag.StringVar(&event.User, "user", "", "the user that is making the action")
 	flag.Parse()
 
-	if event.Action == "" || event.User == "" {
-		logger.Fatal().Msg("action and user must be specified")
-	}
-
 	err := config.InitLogger(jsonOutput)
 	if err != nil {
 		logger.Fatal().Err(err).Caller().Send()
@@ -47,6 +43,10 @@ func main() {
 	if err != nil {
 		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 		logger.Fatal().Err(err).Caller().Send()
+	}
+
+	if event.Action == "" || event.User == "" {
+		logger.Fatal().Msg("action and user must be specified")
 	}
 
 	db, err := db.GetDB()
