@@ -436,6 +436,63 @@ var (
 				assert.ErrorContains(t, err, "cannot attack Oregon from Arizona: not a neighboring territory")
 			},
 		},
+		{
+			desc: "nation is eliminated if no territories left",
+			events: []GameEvent{
+				{
+					User:      "Test User",
+					Action:    "join",
+					Subject:   "Nation 1",
+					Predicate: "CA",
+				},
+				{
+					User:      "Test User 2",
+					Action:    "join",
+					Subject:   "Nation 2",
+					Predicate: "NV",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:    "Test User",
+					Action:  "raise",
+					Subject: "CA",
+				},
+				{
+					User:      "Test User",
+					Action:    "attack",
+					Subject:   "CA",
+					Predicate: "NV",
+				},
+			},
+			beforeEachEvent: func(t *testing.T, d *sql.DB, i int) error {
+				if i > 1 && testInt == nil {
+					testInt = new(int)
+					*testInt = 19
+				}
+				return nil
+			},
+			doValidateQueries: func(t *testing.T, d *sql.DB, _ error) {
+				var nation1Count, nation2Count int
+
+				err := d.QueryRow("SELECT COUNT(*) FROM nations WHERE player = 'Test User'").Scan(&nation1Count)
+				assert.NoError(t, err)
+
+				err = d.QueryRow("SELECT COUNT(*) FROM nations WHERE player = 'Test User 2'").Scan(&nation2Count)
+				assert.NoError(t, err)
+
+				assert.Equal(t, 1, nation1Count, "expected Test User to remain")
+				assert.Zero(t, nation2Count, "expected Test User 2 to be eliminated")
+			},
+		},
 	}
 	raiseTestCases = []eventsTestCase{
 		{
@@ -666,6 +723,7 @@ type eventsTestCase struct {
 	desc              string
 	events            []GameEvent
 	expectError       bool
+	beforeEachEvent   func(*testing.T, *sql.DB, int) error
 	doValidateQueries func(*testing.T, *sql.DB, error)
 
 	db *sql.DB
@@ -682,9 +740,17 @@ func runEventTestCase(t *testing.T, tc *eventsTestCase) {
 	defer func() {
 		assert.NoError(t, db.CloseDB())
 		config.CloseTestingConfig(t)
+		db.CloseDB()
 	}()
 	var errEvent GameEvent
-	for _, event := range tc.events {
+	for e, event := range tc.events {
+		if tc.beforeEachEvent != nil {
+			err = tc.beforeEachEvent(t, tc.db, e)
+			if !assert.NoError(t, err) {
+				t.FailNow()
+			}
+		}
+
 		err = event.DoAction(tc.db)
 		if err != nil {
 			errEvent = event
@@ -698,6 +764,7 @@ func runEventTestCase(t *testing.T, tc *eventsTestCase) {
 	}
 	if tc.doValidateQueries != nil {
 		tc.doValidateQueries(t, tc.db, err)
+		testInt = nil
 	}
 }
 
@@ -713,12 +780,6 @@ func TestInvalidAction(t *testing.T) {
 		t.FailNow()
 	}
 	defer config.CloseTestingConfig(t)
-
-	// db, err := db.GetDB()
-	// if !assert.NoError(t, err) {
-	// 	t.FailNow()
-	// }
-	// defer db.Close()
 
 	// Action should be rejected (no user specified)
 	err = invalidEvent.DoAction(nil)

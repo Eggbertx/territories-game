@@ -26,6 +26,7 @@ var (
 	ErrNationAlreadyJoined      = errors.New("a nation with the given name already exists")
 	ErrTerritoryAlreadyOccupied = errors.New("the territory is already occupied")
 	ErrColorInUse               = errors.New("color already in use by another player")
+	testInt                     *int // for testing purposes, to avoid random number generation in tests
 )
 
 type GameEvent struct {
@@ -318,7 +319,7 @@ func (ge *GameEvent) doNormalAttack(db *sql.DB, attackingFrom, defendingFrom *co
 		return err
 	}
 
-	x := rand.Intn(20) + 1
+	x := randInt(20) + 1
 
 	success := x > (defending-attacking)*2+10
 	infoEv.Bool("success", success)
@@ -332,12 +333,12 @@ func (ge *GameEvent) doNormalAttack(db *sql.DB, attackingFrom, defendingFrom *co
 		// defending armies destroyed
 		defenderLosses = int(math.Min(losses, float64(defending)))
 		config.LogInt("defenderLosses", defenderLosses, infoEv, errEv)
-		err = ge.updateHoldingArmySize(db, nil, defendingFrom.Abbreviation, defending-defenderLosses, errEv)
+		err = ge.updateHoldingArmySize(db, nil, defendingFrom.Abbreviation, defending-defenderLosses, true, infoEv, errEv)
 	} else {
 		// attacking armies destroyed
 		attackerLosses = int(math.Min(math.Abs(losses), float64(attacking)))
 		config.LogInt("attackerLosses", attackerLosses, infoEv, errEv)
-		err = ge.updateHoldingArmySize(db, nil, attackingFrom.Abbreviation, attacking-attackerLosses, errEv)
+		err = ge.updateHoldingArmySize(db, nil, attackingFrom.Abbreviation, attacking-attackerLosses, true, infoEv, errEv)
 	}
 	if err != nil {
 		ge.logger.Err(err).Caller().Msg("Unable to update holding army size")
@@ -456,7 +457,7 @@ func (ge *GameEvent) doMove(db *sql.DB, sourceTerritoryStr string, moveArmies in
 	}
 	defer tx.Rollback()
 
-	if err = ge.updateHoldingArmySize(db, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-moveArmies, errEv); err != nil {
+	if err = ge.updateHoldingArmySize(db, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-moveArmies, false, infoEv, errEv); err != nil {
 		return err
 	}
 	if armiesInDestTerritory == 0 {
@@ -473,7 +474,7 @@ func (ge *GameEvent) doMove(db *sql.DB, sourceTerritoryStr string, moveArmies in
 			return err
 		}
 	} else {
-		if err = ge.updateHoldingArmySize(db, tx, destTerritory.Abbreviation, armiesInDestTerritory+moveArmies, errEv); err != nil {
+		if err = ge.updateHoldingArmySize(db, tx, destTerritory.Abbreviation, armiesInDestTerritory+moveArmies, false, infoEv, errEv); err != nil {
 			return err
 		}
 	}
@@ -532,7 +533,7 @@ func (ge *GameEvent) doRaise(db *sql.DB, territoryStr string) error {
 		return err
 	}
 
-	if err = ge.updateHoldingArmySize(db, nil, territory.Abbreviation, armySize+1, errEv); err != nil {
+	if err = ge.updateHoldingArmySize(db, nil, territory.Abbreviation, armySize+1, false, infoEv, errEv); err != nil {
 		return err
 	}
 
@@ -540,42 +541,118 @@ func (ge *GameEvent) doRaise(db *sql.DB, territoryStr string) error {
 	return nil
 }
 
-func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, errEv *zerolog.Event) error {
+func (ge *GameEvent) numTerritories(db *sql.DB, tx *sql.Tx, territory string, errEv *zerolog.Event) (int, error) {
+	const territoriesLeftSQL = `SELECT COUNT(*) FROM v_nation_holdings WHERE player = (select player from v_nation_holdings where territory = ?)`
+	var stmt *sql.Stmt
+	var err error
+	if tx == nil {
+		stmt, err = db.Prepare(territoriesLeftSQL)
+	} else {
+		stmt, err = tx.Prepare(territoriesLeftSQL)
+	}
+	if err != nil {
+		errEv.Err(err).Caller().Send()
+		return 0, err
+	}
+	defer stmt.Close()
+
+	var count int
+	if err = stmt.QueryRow(ge.User).Scan(&count); err != nil {
+		errEv.Err(err).Caller().Msg("Unable to check if user has territories left")
+		return 0, err
+	}
+	return count, nil
+}
+
+func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool, infoEv, errEv *zerolog.Event) error {
 	const updateSizeSQL = `UPDATE holdings SET army_size = ? WHERE territory = ?`
 	const destroyedSQL = `DELETE FROM holdings WHERE territory = ?`
 	var stmt *sql.Stmt
 	var err error
-	if size > 0 {
-		if tx == nil {
-			stmt, err = db.Prepare(updateSizeSQL)
-		} else {
-			stmt, err = tx.Prepare(updateSizeSQL)
-		}
+	shouldCommit := tx == nil
+	if tx == nil {
+		tx, err = db.Begin()
 		if err != nil {
+			errEv.Err(err).Caller().Msg("Unable to begin transaction")
+			return err
+		}
+		defer tx.Rollback()
+	}
+	if size > 0 {
+		if stmt, err = tx.Prepare(updateSizeSQL); err != nil {
 			errEv.Err(err).Caller().Msg("Unable to prepare update holding army size statement")
 			return err
 		}
 		defer stmt.Close()
-		_, err = stmt.Exec(size, territory)
+		stmt.Exec(size, territory)
 	} else {
-		if tx == nil {
-			stmt, err = db.Prepare(destroyedSQL)
-		} else {
-			stmt, err = tx.Prepare(destroyedSQL)
-		}
-		if err != nil {
+		if stmt, err = tx.Prepare(destroyedSQL); err != nil {
 			errEv.Err(err).Caller().Msg("Unable to prepare delete holding statement")
 			return err
 		}
 		defer stmt.Close()
-		_, err = stmt.Exec(territory)
+		stmt.Exec(territory)
 	}
 	if err != nil {
 		errEv.Err(err).Caller().Msg("Unable to update holding army size")
 	}
+	if err = stmt.Close(); err != nil {
+		errEv.Err(err).Caller().Msg("Unable to close update holding statement")
+		return err
+	}
+
+	if size == 0 && deleteNationIfNoTerritories {
+		territoryCount, err := ge.numTerritories(db, tx, ge.Predicate, errEv)
+		if err != nil {
+			return err
+		}
+		if territoryCount == 0 {
+			stmt, err := db.Prepare("SELECT id FROM nations WHERE player = (SELECT player FROM v_nation_holdings WHERE territory = ?)")
+			if err != nil {
+				errEv.Err(err).Caller().Msg("Unable to prepare get nation ID statement")
+				return err
+			}
+			defer stmt.Close()
+			var nationID int
+			if err = stmt.QueryRow(ge.Predicate).Scan(&nationID); err != nil {
+				errEv.Err(err).Caller().Msg("Unable to get nation ID for deletion")
+				return err
+			}
+
+			if stmt, err = tx.Prepare(`DELETE FROM nations WHERE id = ?`); err != nil {
+				errEv.Err(err).Caller().Msg("Unable to prepare delete nation statement")
+				return err
+			}
+			defer stmt.Close()
+			if _, err = stmt.Exec(nationID); err != nil {
+				errEv.Err(err).Caller().Msg("Unable to delete nation")
+				return err
+			}
+			if err = stmt.Close(); err != nil {
+				errEv.Err(err).Caller().Msg("Unable to close delete nation statement")
+				return err
+			}
+			infoEv.Msg("User has no territories left, nation deleted")
+		}
+	}
+
+	if shouldCommit {
+		if err = tx.Commit(); err != nil {
+			errEv.Err(err).Caller().Msg("Unable to commit transaction")
+			return err
+		}
+	}
+
 	return err
 }
 
+func randInt(max int) int {
+	if testInt != nil {
+		return *testInt % max
+	}
+	return rand.Intn(max)
+}
+
 func randomColor() string {
-	return fmt.Sprintf("%0.2x%0.2x%0.2x", rand.Intn(256), rand.Intn(256), rand.Intn(256))
+	return fmt.Sprintf("%0.2x%0.2x%0.2x", randInt(256), randInt(256), randInt(256))
 }
