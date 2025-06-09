@@ -541,8 +541,8 @@ func (ge *GameEvent) doRaise(db *sql.DB, territoryStr string) error {
 	return nil
 }
 
-func (ge *GameEvent) numTerritories(db *sql.DB, tx *sql.Tx, territory string, errEv *zerolog.Event) (int, error) {
-	const territoriesLeftSQL = `SELECT COUNT(*) FROM v_nation_holdings WHERE player = (select player from v_nation_holdings where territory = ?)`
+func (ge *GameEvent) numTerritories(db *sql.DB, tx *sql.Tx, player string, errEv *zerolog.Event) (int, error) {
+	const territoriesLeftSQL = `SELECT COUNT(*) FROM v_nation_holdings WHERE player = ?`
 	var stmt *sql.Stmt
 	var err error
 	if tx == nil {
@@ -557,7 +557,7 @@ func (ge *GameEvent) numTerritories(db *sql.DB, tx *sql.Tx, territory string, er
 	defer stmt.Close()
 
 	var count int
-	if err = stmt.QueryRow(ge.User).Scan(&count); err != nil {
+	if err = stmt.QueryRow(player).Scan(&count); err != nil {
 		errEv.Err(err).Caller().Msg("Unable to check if user has territories left")
 		return 0, err
 	}
@@ -565,8 +565,6 @@ func (ge *GameEvent) numTerritories(db *sql.DB, tx *sql.Tx, territory string, er
 }
 
 func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool, infoEv, errEv *zerolog.Event) error {
-	const updateSizeSQL = `UPDATE holdings SET army_size = ? WHERE territory = ?`
-	const destroyedSQL = `DELETE FROM holdings WHERE territory = ?`
 	var stmt *sql.Stmt
 	var err error
 	shouldCommit := tx == nil
@@ -578,15 +576,36 @@ func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory str
 		}
 		defer tx.Rollback()
 	}
+
+	stmt, err = tx.Prepare("SELECT player FROM v_nation_holdings WHERE territory = ?")
+	if err != nil {
+		errEv.Err(err).Caller().Msg("Unable to prepare get defending nation statement")
+		return err
+	}
+	defer stmt.Close()
+	var defendingNationPlayer string
+	if err = stmt.QueryRow(territory).Scan(&defendingNationPlayer); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = fmt.Errorf("no defending nation found for territory %s", territory)
+			errEv.Err(err).Caller().Send()
+		}
+		errEv.Err(err).Caller().Msg("Unable to get defending nation")
+		return err
+	}
+	if err = stmt.Close(); err != nil {
+		errEv.Err(err).Caller().Msg("Unable to close get defending nation statement")
+		return err
+	}
+
 	if size > 0 {
-		if stmt, err = tx.Prepare(updateSizeSQL); err != nil {
+		if stmt, err = tx.Prepare("UPDATE holdings SET army_size = ? WHERE territory = ?"); err != nil {
 			errEv.Err(err).Caller().Msg("Unable to prepare update holding army size statement")
 			return err
 		}
 		defer stmt.Close()
 		stmt.Exec(size, territory)
 	} else {
-		if stmt, err = tx.Prepare(destroyedSQL); err != nil {
+		if stmt, err = tx.Prepare("DELETE FROM holdings WHERE territory = ?"); err != nil {
 			errEv.Err(err).Caller().Msg("Unable to prepare delete holding statement")
 			return err
 		}
@@ -602,29 +621,17 @@ func (ge *GameEvent) updateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory str
 	}
 
 	if size == 0 && deleteNationIfNoTerritories {
-		territoryCount, err := ge.numTerritories(db, tx, ge.Predicate, errEv)
+		territoryCount, err := ge.numTerritories(db, tx, defendingNationPlayer, errEv)
 		if err != nil {
 			return err
 		}
 		if territoryCount == 0 {
-			stmt, err := db.Prepare("SELECT id FROM nations WHERE player = (SELECT player FROM v_nation_holdings WHERE territory = ?)")
-			if err != nil {
-				errEv.Err(err).Caller().Msg("Unable to prepare get nation ID statement")
-				return err
-			}
-			defer stmt.Close()
-			var nationID int
-			if err = stmt.QueryRow(ge.Predicate).Scan(&nationID); err != nil {
-				errEv.Err(err).Caller().Msg("Unable to get nation ID for deletion")
-				return err
-			}
-
-			if stmt, err = tx.Prepare(`DELETE FROM nations WHERE id = ?`); err != nil {
+			if stmt, err = tx.Prepare(`DELETE FROM nations WHERE player = ?`); err != nil {
 				errEv.Err(err).Caller().Msg("Unable to prepare delete nation statement")
 				return err
 			}
 			defer stmt.Close()
-			if _, err = stmt.Exec(nationID); err != nil {
+			if _, err = stmt.Exec(defendingNationPlayer); err != nil {
 				errEv.Err(err).Caller().Msg("Unable to delete nation")
 				return err
 			}
