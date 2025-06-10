@@ -15,15 +15,21 @@ import (
 
 var (
 	logger       zerolog.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	validActions                = []string{"join", "color", "raise", "move", "attack"}
+	validActions                = []string{"join", "color", "raise", "move", "attack", "help"}
+	usageStr                    = "Usage: territories-referee join|color|raise|move|attack|help -user <user> -subject <subject> -predicate <predicate>"
 )
 
-func runningInTerminal() bool {
-	fi, err := os.Stdout.Stat()
+func usage(jsonOut bool) {
+	err := config.InitLogger(jsonOut)
 	if err != nil {
-		return false
+		logger.Fatal().Err(err).Caller().Send()
 	}
-	return (fi.Mode() & os.ModeCharDevice) == os.ModeCharDevice
+	logger, err = config.GetLogger()
+	if err != nil {
+		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+		logger.Fatal().Err(err).Caller().Send()
+	}
+	logger.Info().Msg(usageStr)
 }
 
 func main() {
@@ -41,7 +47,7 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		logger.Fatal().Msg("Usage: territories-referee join|color|raise|move|attack -user <user> -subject <subject> -predicate <predicate>")
+		logger.Fatal().Msg(usageStr)
 		os.Exit(1)
 	}
 	if !slices.Contains(validActions, os.Args[1]) {
@@ -50,6 +56,10 @@ func main() {
 	}
 
 	event.Action = os.Args[1]
+	if event.Action == "help" {
+		usage(len(os.Args) > 2 && os.Args[2] == "-json")
+		os.Exit(0)
+	}
 	flagSet := flag.NewFlagSet("territories-referee", flag.ExitOnError)
 	flagSet.BoolVar(&jsonOutput, "json", false, "output in JSON format, default is colorized text (for console)")
 	flagSet.StringVar(&event.Subject, "subject", "", "the subject of the action")

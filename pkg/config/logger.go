@@ -12,7 +12,7 @@ var (
 	loggerInitialized bool
 )
 
-func runningInTerminal() bool {
+func RunningInTerminal() bool {
 	fi, err := os.Stdout.Stat()
 	if err != nil {
 		return false
@@ -39,8 +39,9 @@ func LogInt(key string, val int, ev ...*zerolog.Event) {
 }
 
 func InitLogger(printJSON bool) error {
-	consolePrintJSON = printJSON
+	consolePrintJSON = printJSON || !RunningInTerminal()
 	var err error
+	loggerInitialized = false // resets the logger
 	logger, err = GetLogger()
 	if err == nil {
 		loggerInitialized = true
@@ -59,10 +60,9 @@ func GetLogger() (zerolog.Logger, error) {
 	}
 	var consoleOut zerolog.Logger
 	var logFileOut zerolog.Logger
-
-	if consolePrintJSON || !runningInTerminal() {
+	if consolePrintJSON || !RunningInTerminal() {
 		consoleOut = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	} else if runningInTerminal() {
+	} else if RunningInTerminal() {
 		consoleOut = zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	}
 
