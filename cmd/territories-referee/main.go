@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"slices"
+	"strconv"
 
 	"github.com/Eggbertx/territories-game/pkg/actions"
 	"github.com/Eggbertx/territories-game/pkg/config"
@@ -14,12 +15,13 @@ import (
 )
 
 var (
-	logger       zerolog.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	validActions                = []string{"join", "color", "raise", "move", "attack", "help"}
-	usageStr                    = "Usage: territories-referee join|color|raise|move|attack|help -user <user> -subject <subject> -predicate <predicate>"
+	validActions []string
+
+	logger   zerolog.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+	usageStr                = "Usage: territories-referee join|color|raise|move|attack|help -user <user> -json [...]"
 )
 
-func usage(jsonOut bool) {
+func usage(jsonOut bool, fatal bool) {
 	err := config.InitLogger(jsonOut)
 	if err != nil {
 		logger.Fatal().Err(err).Caller().Send()
@@ -29,13 +31,17 @@ func usage(jsonOut bool) {
 		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 		logger.Fatal().Err(err).Caller().Send()
 	}
-	logger.Info().Msg(usageStr)
+	var ev *zerolog.Event
+	if fatal {
+		ev = logger.Fatal()
+	} else {
+		ev = logger.Info()
+	}
+	ev.Msg(usageStr)
 }
 
 func main() {
-	var event actions.GameEvent
 	var jsonOutput bool
-
 	err := config.InitLogger(false)
 	if err != nil {
 		logger.Fatal().Err(err).Caller().Send()
@@ -45,27 +51,78 @@ func main() {
 		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 		logger.Fatal().Err(err).Caller().Send()
 	}
-
 	if len(os.Args) < 2 {
-		logger.Fatal().Msg(usageStr)
-		os.Exit(1)
+		usage(false, true)
 	}
+	validActions := actions.RegisteredActionParsers()
 	if !slices.Contains(validActions, os.Args[1]) {
 		logger.Fatal().Msgf("Invalid action '%s', valid actions are: %v", os.Args[1], validActions)
-		os.Exit(1)
 	}
 
-	event.Action = os.Args[1]
-	if event.Action == "help" {
-		usage(len(os.Args) > 2 && os.Args[2] == "-json")
+	actionType := os.Args[1]
+
+	var user string
+	var actionArgs []string
+	var armies int
+
+	switch actionType {
+	case "join":
+		var nation string
+		var territory string
+		flagSet := flag.NewFlagSet("", flag.ExitOnError)
+		flagSet.StringVar(&user, "user", "", "the user that is joining the game")
+		flagSet.BoolVar(&jsonOutput, "json", false, "log output in JSON format")
+		flagSet.StringVar(&nation, "nation", "", "the name of the nation the user is joining")
+		flagSet.StringVar(&territory, "territory", "", "the territory the user is joining")
+		flagSet.Parse(os.Args[2:])
+		actionArgs = []string{user, nation, territory}
+	case "color":
+		var color string
+		flagSet := flag.NewFlagSet("", flag.ExitOnError)
+		flagSet.StringVar(&user, "user", "", "the user that is changing their color")
+		flagSet.BoolVar(&jsonOutput, "json", false, "log output in JSON format")
+		flagSet.StringVar(&color, "color", "", "the new color for the user")
+		flagSet.Parse(os.Args[2:])
+		actionArgs = []string{user, color}
+	case "raise":
+		var territory string
+		flagSet := flag.NewFlagSet("", flag.ExitOnError)
+		flagSet.StringVar(&user, "user", "", "the user that is raising armies")
+		flagSet.BoolVar(&jsonOutput, "json", false, "log output in JSON format")
+		flagSet.StringVar(&territory, "territory", "", "the territory where the user is raising the army size")
+		flagSet.Parse(os.Args[2:])
+		actionArgs = []string{user, territory}
+	case "move":
+		var sourceTerritory string
+		var destinationTerritory string
+		flagSet := flag.NewFlagSet("", flag.ExitOnError)
+		flagSet.StringVar(&user, "user", "", "the user that is moving armies")
+		flagSet.BoolVar(&jsonOutput, "json", false, "log output in JSON format")
+		flagSet.IntVar(&armies, "armies", 0, "the number of armies to move")
+		flagSet.StringVar(&sourceTerritory, "source", "", "the territory from which the user is moving armies")
+		flagSet.StringVar(&destinationTerritory, "destination", "", "the territory to which the user is moving armies")
+		flagSet.Parse(os.Args[2:])
+		if armies > 0 {
+			actionArgs = []string{user, strconv.Itoa(armies), sourceTerritory, destinationTerritory}
+		} else {
+			actionArgs = []string{user, sourceTerritory, destinationTerritory}
+		}
+	case "attack":
+		var attackingTerritory string
+		var defendingTerritory string
+		flagSet := flag.NewFlagSet("", flag.ExitOnError)
+		flagSet.StringVar(&user, "user", "", "the user that is attacking")
+		flagSet.BoolVar(&jsonOutput, "json", false, "log output in JSON format")
+		flagSet.StringVar(&attackingTerritory, "attacking", "", "the territory from which the user is attacking")
+		flagSet.StringVar(&defendingTerritory, "defending", "", "the territory that is being attacked")
+		flagSet.Parse(os.Args[2:])
+		actionArgs = []string{user, attackingTerritory, defendingTerritory}
+	case "help", "-h":
+		usage(len(os.Args) > 2 && os.Args[2] == "-json", false)
 		os.Exit(0)
+	default:
+		usage(false, true)
 	}
-	flagSet := flag.NewFlagSet("territories-referee", flag.ExitOnError)
-	flagSet.BoolVar(&jsonOutput, "json", false, "output in JSON format, default is colorized text (for console)")
-	flagSet.StringVar(&event.Subject, "subject", "", "the subject of the action")
-	flagSet.StringVar(&event.Predicate, "predicate", "", "the target that the subject is going to be joining, moving to, attacking, etc")
-	flagSet.StringVar(&event.User, "user", "", "the user that is making the action")
-	flagSet.Parse(os.Args[2:])
 
 	if err = config.InitLogger(jsonOutput); err != nil {
 		logger.Fatal().Err(err).Caller().Send()
@@ -77,26 +134,45 @@ func main() {
 		logger.Fatal().Err(err).Caller().Send()
 	}
 
-	if event.Action == "" || event.User == "" {
-		logger.Fatal().Msg("user must be specified")
+	fatalEv := logger.Fatal()
+	defer fatalEv.Discard()
+	fatalEv.Str("action", actionType)
+	fatalEv.Str("user", user)
+
+	if actionType == "" || user == "" {
+		fatalEv.Msg("user must be specified")
 	}
+
+	// if actionType == "move" && armies > 0 {
+	// 	actionType = fmt.Sprintf("%s%d", actionType, armies)
+	// }
 
 	db, err := db.GetDB()
 	if err != nil {
-		logger.Fatal().Err(err).Caller().Send()
+		fatalEv.Err(err).Caller().Send()
 	}
 
 	defer func() {
 		if err := db.Close(); err != nil {
-			logger.Fatal().Err(err).Caller().Send()
+			fatalEv.Err(err).Caller().Send()
 		}
 	}()
 
-	if event.DoAction(db) != nil {
+	actionParser, err := actions.GetActionParser(actionType)
+	if err != nil {
+		fatalEv.Err(err).Caller().Msg("Unable to get action parser")
+	}
+
+	action, err := actionParser(actionArgs...)
+	if err != nil {
+		fatalEv.Err(err).Caller().Msgf("Unable to parse action parameters")
+	}
+
+	if action.DoAction(db) != nil {
 		os.Exit(1)
 	}
 
 	if err = svgmap.ApplyDBEvents(); err != nil {
-		logger.Fatal().Err(err).Caller().Send()
+		fatalEv.Err(err).Caller().Send()
 	}
 }

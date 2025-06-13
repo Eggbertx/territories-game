@@ -11,7 +11,7 @@
 			"mode": "debug",
 			"cwd": "${workspaceFolder}",
 			"program": "${workspaceFolder}/cmd/territories-referee",
-			"args": ["-action", "join", "-user", "testuser", "-subject", "args", "-predicate", "HI"],
+			"args": ["join", "-user", "Test User", "-nation", "Test Nation", "-territory", "HI"],
 		}
 	]
 }

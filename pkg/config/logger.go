@@ -49,26 +49,31 @@ func InitLogger(printJSON bool) error {
 	return err
 }
 
+// GetLogger initializes and returns a zerolog.Logger instance. If an error occurs, it returns the default logger.
 func GetLogger() (zerolog.Logger, error) {
 	if loggerInitialized {
 		return logger, nil
+	}
+
+	logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	var consoleOut zerolog.Logger
+	var logFileOut zerolog.Logger
+	if !consolePrintJSON && RunningInTerminal() {
+		consoleOut = zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
+	} else {
+		consoleOut = zerolog.New(os.Stdout).With().Timestamp().Logger()
 	}
 
 	cfg, err := GetConfig()
 	if err != nil {
 		return logger, err
 	}
-	var consoleOut zerolog.Logger
-	var logFileOut zerolog.Logger
-	if consolePrintJSON || !RunningInTerminal() {
-		consoleOut = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	} else if RunningInTerminal() {
-		consoleOut = zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
-	}
 
 	if cfg.LogFile != "" {
 		logFile, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
+			logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 			return logger, err
 		}
 		logFileOut = zerolog.New(logFile)

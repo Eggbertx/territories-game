@@ -35,6 +35,7 @@ go.work.sum
 out/
 config.json
 /territories-referee
+/referee
 *.db
 *.*-journal
 *.log

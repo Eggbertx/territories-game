@@ -11,69 +11,61 @@ import (
 )
 
 var (
-	joinTestCases = []eventsTestCase{
+	joinTestCases = []actionsTestCase{
 		{
 			desc: "valid join events",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "",
+					territory: "NV",
 				},
 			},
 			expectError: false,
 		},
 		{
 			desc: "reject join from duplicate user",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 2",
+					territory: "NV",
 				},
 			},
 			expectError: true,
 		},
 		{
 			desc: "reject join with duplicate nation name",
-			events: []GameEvent{
-				{
-					User:      "Test User 1",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User 1",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 1",
+					territory: "NV",
 				},
 			},
 			expectError: true,
 		},
 		{
-			desc: "don't reject join with missing subject",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "",
-					Predicate: "CA",
+			desc: "don't reject join with missing nation name",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					territory: "CA",
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
@@ -90,18 +82,16 @@ var (
 		},
 		{
 			desc: "reject join, territory already occupied",
-			events: []GameEvent{
-				{
-					User:      "Test User 1",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User 1",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "CA",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 2",
+					territory: "CA",
 				},
 			},
 			expectError: true,
@@ -126,30 +116,26 @@ var (
 			},
 		},
 	}
-	colorTestCases = []eventsTestCase{
+	colorTestCases = []actionsTestCase{
 		{
 			desc: "valid color changes",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "color",
-					Subject: "white",
+				&ColorAction{
+					user:  "Test User",
+					color: "white",
 				},
-				{
-					User:    "Test User",
-					Action:  "color",
-					Subject: "ffffff",
+				&ColorAction{
+					user:  "Test User",
+					color: "ffffff",
 				},
-				{
-					User:    "Test User",
-					Action:  "color",
-					Subject: "#ffffff",
+				&ColorAction{
+					user:  "Test User",
+					color: "#ffffff",
 				},
 			},
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
@@ -166,62 +152,54 @@ var (
 		},
 		{
 			desc: "reject invalid color",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "color",
-					Subject: "invalidcolor",
+				&ColorAction{
+					user:  "Test User",
+					color: "invalidcolor",
 				},
 			},
 			expectError: true,
 		},
 		{
 			desc: "don't allow changing someone else's color",
-			events: []GameEvent{
-				{
-					User:      "Test User 1",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User 1",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User 2",
-					Action:  "color",
-					Subject: "ffffff",
+				&ColorAction{
+					user:  "Test User 2",
+					color: "ffffff",
 				},
 			},
 			expectError: true,
 		},
 		{
 			desc: "don't allow duplicate color",
-			events: []GameEvent{
-				{
-					User:      "Test User 1",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User 1",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 2",
+					territory: "NV",
 				},
-				{
-					User:    "Test User 1",
-					Action:  "color",
-					Subject: "ffffff",
+				&ColorAction{
+					user:  "Test User 1",
+					color: "ffffff",
 				},
-				{
-					User:    "Test User 2",
-					Action:  "color",
-					Subject: "ffffff",
+				&ColorAction{
+					user:  "Test User 2",
+					color: "ffffff",
 				},
 			},
 			expectError: true,
@@ -246,11 +224,10 @@ var (
 		},
 		{
 			desc: "reject unregistered user",
-			events: []GameEvent{
-				{
-					User:    "Unregistered User",
-					Action:  "color",
-					Subject: "ffffff",
+			events: []Action{
+				&ColorAction{
+					user:  "Unregistered User",
+					color: "ffffff",
 				},
 			},
 			expectError: true,
@@ -263,20 +240,19 @@ var (
 			},
 		},
 	}
-	attackTestCases = []eventsTestCase{
+	attackTestCases = []actionsTestCase{
 		{
 			desc: "invalid attack territory",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "attack",
-					Subject: "lol",
+				&AttackAction{
+					user:               "Test User",
+					attackingTerritory: "lol",
+					defendingTerritory: "CA",
 				},
 			},
 			expectError: true,
@@ -286,18 +262,16 @@ var (
 		},
 		{
 			desc: "can't attack own territory",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User",
-					Action:    "attack",
-					Subject:   "CA",
-					Predicate: "CA",
+				&AttackAction{
+					user:               "Test User",
+					attackingTerritory: "CA",
+					defendingTerritory: "CA",
 				},
 			},
 			expectError: true,
@@ -307,12 +281,11 @@ var (
 		},
 		{
 			desc: "reject attack from unregistered user",
-			events: []GameEvent{
-				{
-					User:      "Unregistered User",
-					Action:    "attack",
-					Subject:   "CA",
-					Predicate: "NV",
+			events: []Action{
+				&AttackAction{
+					user:               "Unregistered User",
+					attackingTerritory: "CA",
+					defendingTerritory: "NV",
 				},
 			},
 			expectError: true,
@@ -326,24 +299,21 @@ var (
 		},
 		{
 			desc: "valid attack",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 2",
+					territory: "NV",
 				},
-				{
-					User:      "Test User",
-					Action:    "attack",
-					Subject:   "CA",
-					Predicate: "NV",
+				&AttackAction{
+					user:               "Test User",
+					attackingTerritory: "CA",
+					defendingTerritory: "NV",
 				},
 			},
 			doValidateQueries: func(t *testing.T, d *sql.DB, _ error) {
@@ -363,18 +333,16 @@ var (
 		},
 		{
 			desc: "no armies in defending territory",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User",
-					Action:    "attack",
-					Subject:   "CA",
-					Predicate: "NV",
+				&AttackAction{
+					user:               "Test User",
+					attackingTerritory: "CA",
+					defendingTerritory: "NV",
 				},
 			},
 			expectError: true,
@@ -384,24 +352,21 @@ var (
 		},
 		{
 			desc: "no armies in attacking territory",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 2",
+					territory: "NV",
 				},
-				{
-					User:      "Test User",
-					Action:    "attack",
-					Subject:   "UT",
-					Predicate: "NV",
+				&AttackAction{
+					user:               "Test User",
+					attackingTerritory: "UT",
+					defendingTerritory: "NV",
 				},
 			},
 			expectError: true,
@@ -411,24 +376,21 @@ var (
 		},
 		{
 			desc: "can't attack non-neighboring territory",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "AZ",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "AZ",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "OR",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 2",
+					territory: "OR",
 				},
-				{
-					User:      "Test User",
-					Action:    "attack",
-					Subject:   "AZ",
-					Predicate: "OR",
+				&AttackAction{
+					user:               "Test User",
+					attackingTerritory: "AZ",
+					defendingTerritory: "OR",
 				},
 			},
 			expectError: true,
@@ -438,39 +400,33 @@ var (
 		},
 		{
 			desc: "nation is eliminated if no territories left",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 2",
+					territory: "NV",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:      "Test User",
-					Action:    "attack",
-					Subject:   "CA",
-					Predicate: "NV",
+				&AttackAction{
+					user:               "Test User",
+					attackingTerritory: "CA",
+					defendingTerritory: "NV",
 				},
 			},
 			beforeEachEvent: func(t *testing.T, d *sql.DB, i int) error {
@@ -494,25 +450,22 @@ var (
 			},
 		},
 	}
-	raiseTestCases = []eventsTestCase{
+	raiseTestCases = []actionsTestCase{
 		{
 			desc: "valid raise event",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
@@ -526,37 +479,31 @@ var (
 		},
 		{
 			desc: "enforce max raise limit",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
 			},
 			expectError: true,
@@ -572,17 +519,15 @@ var (
 		},
 		{
 			desc: "raise in unowned territory",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "NV",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "NV",
 				},
 			},
 			expectError: true,
@@ -595,11 +540,10 @@ var (
 		},
 		{
 			desc: "raise from unregistered user",
-			events: []GameEvent{
-				{
-					User:    "Unregistered User",
-					Action:  "raise",
-					Subject: "CA",
+			events: []Action{
+				&RaiseAction{
+					user:      "Unregistered User",
+					territory: "CA",
 				},
 			},
 			expectError: true,
@@ -612,26 +556,23 @@ var (
 			},
 		},
 	}
-	moveTestCases = []eventsTestCase{
+	moveTestCases = []actionsTestCase{
 		{
 			desc: "valid move event (all units)",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:      "Test User",
-					Action:    "move",
-					Subject:   "CA",
-					Predicate: "NV",
+				&MoveAction{
+					user:                 "Test User",
+					sourceTerritory:      "CA",
+					destinationTerritory: "NV",
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
@@ -649,23 +590,21 @@ var (
 		},
 		{
 			desc: "valid move event (some units)",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:    "Test User",
-					Action:  "raise",
-					Subject: "CA",
+				&RaiseAction{
+					user:      "Test User",
+					territory: "CA",
 				},
-				{
-					User:      "Test User",
-					Action:    "move",
-					Subject:   "CA:1",
-					Predicate: "NV",
+				&MoveAction{
+					user:                 "Test User",
+					sourceTerritory:      "CA",
+					destinationTerritory: "NV",
+					armies:               1,
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
@@ -685,24 +624,21 @@ var (
 		},
 		{
 			desc: "territory already occupied",
-			events: []GameEvent{
-				{
-					User:      "Test User",
-					Action:    "join",
-					Subject:   "Nation 1",
-					Predicate: "CA",
+			events: []Action{
+				&JoinAction{
+					user:      "Test User",
+					nation:    "Nation 1",
+					territory: "CA",
 				},
-				{
-					User:      "Test User 2",
-					Action:    "join",
-					Subject:   "Nation 2",
-					Predicate: "NV",
+				&JoinAction{
+					user:      "Test User 2",
+					nation:    "Nation 2",
+					territory: "NV",
 				},
-				{
-					User:      "Test User",
-					Action:    "move",
-					Subject:   "CA",
-					Predicate: "NV",
+				&MoveAction{
+					user:                 "Test User",
+					sourceTerritory:      "CA",
+					destinationTerritory: "NV",
 				},
 			},
 			expectError: true,
@@ -719,9 +655,9 @@ var (
 	}
 )
 
-type eventsTestCase struct {
+type actionsTestCase struct {
 	desc              string
-	events            []GameEvent
+	events            []Action
 	expectError       bool
 	beforeEachEvent   func(*testing.T, *sql.DB, int) error
 	doValidateQueries func(*testing.T, *sql.DB, error)
@@ -729,7 +665,7 @@ type eventsTestCase struct {
 	db *sql.DB
 }
 
-func runEventTestCase(t *testing.T, tc *eventsTestCase) {
+func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 	var err error
 	config.GetTestingConfig()
 	tc.db, err = db.GetDB()
@@ -742,7 +678,7 @@ func runEventTestCase(t *testing.T, tc *eventsTestCase) {
 		config.CloseTestingConfig(t)
 		db.CloseDB()
 	}()
-	var errEvent GameEvent
+	var errAction Action
 	for e, event := range tc.events {
 		if tc.beforeEachEvent != nil {
 			err = tc.beforeEachEvent(t, tc.db, e)
@@ -753,14 +689,15 @@ func runEventTestCase(t *testing.T, tc *eventsTestCase) {
 
 		err = event.DoAction(tc.db)
 		if err != nil {
-			errEvent = event
+			errAction = event
 			break
 		}
 	}
-	if tc.expectError && !assert.Error(t, err, "expected error for event: %v", errEvent) {
-		t.FailNow()
-	} else if !tc.expectError && !assert.NoError(t, err, "unexpected error for event: %v", errEvent) {
-		t.FailNow()
+
+	if tc.expectError {
+		assert.Error(t, err, "expected error for event: %v", errAction)
+	} else {
+		assert.NoError(t, err, "unexpected error for event: %v", errAction)
 	}
 	if tc.doValidateQueries != nil {
 		tc.doValidateQueries(t, tc.db, err)
@@ -768,38 +705,10 @@ func runEventTestCase(t *testing.T, tc *eventsTestCase) {
 	}
 }
 
-func TestInvalidAction(t *testing.T) {
-	invalidEvent := GameEvent{
-		User:      "Test User",
-		Action:    "test",
-		Subject:   "Nation 1",
-		Predicate: "CA",
-	}
-	_, err := config.GetTestingConfig()
-	if !assert.NoError(t, err) {
-		t.FailNow()
-	}
-	defer config.CloseTestingConfig(t)
-
-	// Action should be rejected (no user specified)
-	err = invalidEvent.DoAction(nil)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrInvalidAction)
-
-	invalidEvent = GameEvent{
-		Action:    "join",
-		Subject:   "Test Nation",
-		Predicate: "CA",
-	}
-	err = invalidEvent.DoAction(nil)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrMissingUser)
-}
-
 func TestJoinEvent(t *testing.T) {
 	for _, tc := range joinTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			runEventTestCase(t, &tc)
+			runActionTestCase(t, &tc)
 		})
 	}
 }
@@ -807,7 +716,7 @@ func TestJoinEvent(t *testing.T) {
 func TestColorEvent(t *testing.T) {
 	for _, tc := range colorTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			runEventTestCase(t, &tc)
+			runActionTestCase(t, &tc)
 		})
 	}
 }
@@ -815,7 +724,7 @@ func TestColorEvent(t *testing.T) {
 func TestAttackEvent(t *testing.T) {
 	for _, tc := range attackTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			runEventTestCase(t, &tc)
+			runActionTestCase(t, &tc)
 		})
 	}
 }
@@ -823,7 +732,7 @@ func TestAttackEvent(t *testing.T) {
 func TestRaiseEvent(t *testing.T) {
 	for _, tc := range raiseTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			runEventTestCase(t, &tc)
+			runActionTestCase(t, &tc)
 		})
 	}
 }
@@ -831,7 +740,7 @@ func TestRaiseEvent(t *testing.T) {
 func TestMoveEvent(t *testing.T) {
 	for _, tc := range moveTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			runEventTestCase(t, &tc)
+			runActionTestCase(t, &tc)
 		})
 	}
 }
