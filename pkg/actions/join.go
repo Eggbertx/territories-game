@@ -82,7 +82,7 @@ func (ja *JoinAction) DoAction(db *sql.DB) error {
 		errEv.Err(err).Caller().Msg("Unable to add nation")
 		return err
 	}
-	if _, err = tx.Exec(nationInitialHolding, ja.nation, ja.territory); err != nil {
+	if _, err = tx.Exec(nationInitialHolding, ja.nation, joinTerritory.Abbreviation); err != nil {
 		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
 			err = ErrTerritoryAlreadyOccupied
 		}
