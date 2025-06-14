@@ -1,8 +1,11 @@
 {
 	"mapFile": "usa-with-territories.svg",
 	"dbFile": "territories.db",
+	"logFile": "out/territories.log",
+	"printLogToConsole": true,
 	"svgOutFile": "out/map-modified.svg",
 	"pngOutFile": "out/map.png",
+	"doCounterattack": false,
 	"maxArmiesPerTerritory": 5,
 	"initialArmies": 3,
 	"minimumNationsToStart": 3,
