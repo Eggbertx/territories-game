@@ -57,7 +57,7 @@ func (ja *JoinAction) DoAction(db *sql.DB) error {
 	const nationAddSQL = `INSERT INTO nations (country_name,player, color) VALUES(?,?,?)`
 	const nationInitialHolding = `INSERT INTO holdings (nation_id, territory, army_size) VALUES(
 		(SELECT id FROM nations WHERE country_name = ?),
-		?, 1)`
+		?, ?)`
 	var numPlayerMatches int
 	var numNationMatches int
 	if err = tx.QueryRow(userAlreadyJoinedSQL, ja.user).Scan(&numPlayerMatches); err != nil {
@@ -82,7 +82,7 @@ func (ja *JoinAction) DoAction(db *sql.DB) error {
 		errEv.Err(err).Caller().Msg("Unable to add nation")
 		return err
 	}
-	if _, err = tx.Exec(nationInitialHolding, ja.nation, joinTerritory.Abbreviation); err != nil {
+	if _, err = tx.Exec(nationInitialHolding, ja.nation, joinTerritory.Abbreviation, cfg.InitialArmies); err != nil {
 		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
 			err = ErrTerritoryAlreadyOccupied
 		}

@@ -327,8 +327,8 @@ var (
 					t.FailNow()
 				}
 				// TODO: populate battle results in the database
-				assert.LessOrEqual(t, defendingArmySize, 1)
-				assert.LessOrEqual(t, attackingArmySize, 1)
+				assert.LessOrEqual(t, defendingArmySize, 3)
+				assert.LessOrEqual(t, attackingArmySize, 3)
 			},
 		},
 		{
@@ -419,10 +419,6 @@ var (
 					user:      "Test User",
 					territory: "CA",
 				},
-				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
-				},
 				&AttackAction{
 					user:               "Test User",
 					attackingTerritory: "CA",
@@ -474,7 +470,7 @@ var (
 				if !assert.NoError(t, err) {
 					t.FailNow()
 				}
-				assert.Equal(t, 3, armySize)
+				assert.Equal(t, 5, armySize)
 			},
 		},
 		{
@@ -565,10 +561,6 @@ var (
 					nation:    "Nation 1",
 					territory: "CA",
 				},
-				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
-				},
 				&MoveAction{
 					user:                 "Test User",
 					sourceTerritory:      "CA",
@@ -585,7 +577,7 @@ var (
 				if !assert.NoError(t, err) {
 					t.FailNow()
 				}
-				assert.Equal(t, 2, armySize, "expected one unit to be moved to NV")
+				assert.Equal(t, 3, armySize, "expected one unit to be moved to NV")
 			},
 		},
 		{
@@ -613,7 +605,7 @@ var (
 				if !assert.NoError(t, err) {
 					t.FailNow()
 				}
-				assert.Equal(t, 1, armySize, "expected one unit left in CA after move")
+				assert.Equal(t, 3, armySize, "expected one unit left in CA after move")
 
 				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'NV'").Scan(&armySize)
 				if !assert.NoError(t, err) {
@@ -649,7 +641,7 @@ var (
 				if !assert.NoError(t, err) {
 					t.FailNow()
 				}
-				assert.Equal(t, 1, armySize, "expected no units moved from CA due to occupation of NV")
+				assert.Equal(t, 3, armySize, "expected no units moved from CA due to occupation of NV")
 			},
 		},
 	}
