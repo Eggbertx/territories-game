@@ -12,22 +12,40 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type ColorActionResult struct {
+	actionResultBase[*ColorAction]
+}
+
+func (car *ColorActionResult) ActionType() string {
+	return "color"
+}
+
+func (car *ColorActionResult) String() string {
+	str := car.actionResultBase.String()
+	if str != "" {
+		return str
+	}
+	action := *car.action
+
+	return fmt.Sprintf("%s changed their nation's color to %s", action.user, action.color)
+}
+
 type ColorAction struct {
 	user   string
 	color  string
 	logger zerolog.Logger
 }
 
-func (ca *ColorAction) DoAction(db *sql.DB) error {
+func (ca *ColorAction) DoAction(db *sql.DB) (ActionResult, error) {
 	err := ValidateUser(ca.user, db, ca.logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	parsedColor, err := csscolorparser.Parse(ca.color)
 	if err != nil {
 		ca.logger.Err(err).Caller().Send()
-		return err
+		return nil, err
 	}
 	parsedColor.A = 1.0 // Ensure the color is fully opaque
 	ca.color = strings.TrimPrefix(parsedColor.Clamp().HexString(), "#")
@@ -35,7 +53,7 @@ func (ca *ColorAction) DoAction(db *sql.DB) error {
 	stmt, err := db.Prepare("UPDATE nations SET color = ? WHERE player = ?")
 	if err != nil {
 		ca.logger.Err(err).Caller().Msg("Unable to prepare color update statement")
-		return err
+		return nil, err
 	}
 	defer stmt.Close()
 	if _, err = stmt.Exec(ca.color, ca.user); err != nil {
@@ -43,14 +61,18 @@ func (ca *ColorAction) DoAction(db *sql.DB) error {
 			err = ErrColorInUse
 		}
 		ca.logger.Err(err).Caller().Msg("Unable to update nation color")
-		return err
+		return nil, err
 	}
 	if err = stmt.Close(); err != nil {
 		ca.logger.Err(err).Caller().Msg("Unable to close color update statement")
-		return err
+		return nil, err
 	}
-	ca.logger.Info().Msg("Updated player color")
-	return nil
+
+	var result ColorActionResult
+	result.action = &ca
+	result.user = ca.user
+	ca.logger.Info().Msg(result.String())
+	return &result, nil
 }
 
 func randomColor() string {

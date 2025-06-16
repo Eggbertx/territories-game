@@ -143,10 +143,6 @@ func main() {
 		fatalEv.Msg("user must be specified")
 	}
 
-	// if actionType == "move" && armies > 0 {
-	// 	actionType = fmt.Sprintf("%s%d", actionType, armies)
-	// }
-
 	db, err := db.GetDB()
 	if err != nil {
 		fatalEv.Err(err).Caller().Send()
@@ -167,8 +163,8 @@ func main() {
 	if err != nil {
 		fatalEv.Err(err).Caller().Msgf("Unable to parse action parameters")
 	}
-
-	if action.DoAction(db) != nil {
+	// var actionResult actions.ActionResult
+	if _, err = action.DoAction(db); err != nil {
 		os.Exit(1)
 	}
 

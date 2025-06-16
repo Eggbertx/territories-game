@@ -10,7 +10,6 @@ var (
 	ErrInvalidAction            = errors.New(`action must be join, move, or attack`)
 	ErrMissingUser              = errors.New("unset user string")
 	ErrUserNotRegistered        = errors.New("user is not registered in the game")
-	ErrNoCountryName            = errors.New("missing country name from subject")
 	ErrNoTargetTerritory        = errors.New("missing target territory name or abbreviation")
 	ErrPlayerAlreadyJoined      = errors.New("the player already joined")
 	ErrNationAlreadyJoined      = errors.New("a nation with the given name already exists")
@@ -21,13 +20,47 @@ var (
 	registeredActionParsers map[string]ActionParser = make(map[string]ActionParser)
 )
 
+const (
+	noActionString = "no action performed"
+)
+
 type Action interface {
-	DoAction(db *sql.DB) error
+	DoAction(db *sql.DB) (ActionResult, error)
+}
+
+type ActionResult interface {
+	ActionType() string
+	User() string
+	String() string
+}
+
+type actionResultBase[a Action] struct {
+	action *a
+	user   string
+}
+
+func (arb *actionResultBase[a]) User() string {
+	if arb.action == nil {
+		return ""
+	}
+	return arb.user
+}
+
+func (arb *actionResultBase[a]) String() string {
+	if arb.action == nil {
+		return noActionString
+	}
+	if arb.user == "" {
+		return ErrMissingUser.Error()
+	}
+
+	return ""
 }
 
 type ActionParser func(...string) (Action, error)
 
 func RegisterActionParser(actionType string, parser ActionParser) error {
+
 	if _, exists := registeredActionParsers[actionType]; exists {
 		return fmt.Errorf("action %s already registered", actionType)
 	}

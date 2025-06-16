@@ -679,7 +679,7 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 			}
 		}
 
-		err = event.DoAction(tc.db)
+		_, err = event.DoAction(tc.db)
 		if err != nil {
 			errAction = event
 			break
