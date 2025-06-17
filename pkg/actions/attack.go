@@ -10,6 +10,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	attackActionStalemateFmt = "%s attacked %s from %s, attack failed (rolled %d) and no armies were lost"
+	attackActionSuccessFmt   = "%s attacked %s from %s, attack succeeded (rolled %d) and %d defending armies were lost"
+	attackActionFailureFmt   = "%s attacked %s from %s, attack failed (rolled %d) and %d attacking armies were lost"
+)
+
 type AttackActionResult struct {
 	actionResultBase[*AttackAction]
 	dieRoll   int
@@ -32,15 +38,12 @@ func (aar *AttackActionResult) String() string {
 		return noActionString
 	}
 	if aar.losses == 0 {
-		return fmt.Sprintf("%s attacked %s from %s, attack failed (rolled %d) but no armies were lost",
-			action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll)
+		return fmt.Sprintf(attackActionStalemateFmt, action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll)
 	}
 	if aar.losses > 0 {
-		return fmt.Sprintf("%s attacked %s from %s, attack succeeded (rolled %d) and %d defending armies were lost",
-			action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll, aar.losses)
+		return fmt.Sprintf(attackActionSuccessFmt, action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll, aar.losses)
 	}
-	return fmt.Sprintf("%s attacked %s from %s, attack failed (rolled %d) and %d attacking armies were lost",
-		action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll, -aar.losses)
+	return fmt.Sprintf(attackActionFailureFmt, action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll, -aar.losses)
 }
 
 type AttackAction struct {

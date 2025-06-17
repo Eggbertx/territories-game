@@ -10,6 +10,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	moveAllArmiesResultFmt  = "%s moved all armies from %s to %s"
+	moveSomeArmiesResultFmt = "%s moved %d armies from %s to %s"
+)
+
 var (
 	ErrInvalidMove = errors.New("invalid move action format, expected 'move' or 'moveX' where X is the number of armies")
 )
@@ -32,9 +37,9 @@ func (mar *MoveActionResult) String() string {
 		return noActionString
 	}
 	if action.armies <= 0 {
-		return fmt.Sprintf("%s moved all armies from %s to %s", action.user, action.sourceTerritory, action.destinationTerritory)
+		return fmt.Sprintf(moveAllArmiesResultFmt, action.user, action.sourceTerritory, action.destinationTerritory)
 	}
-	return fmt.Sprintf("Moved %d armies from %s to %s", action.armies, action.sourceTerritory, action.destinationTerritory)
+	return fmt.Sprintf(moveSomeArmiesResultFmt, action.user, action.armies, action.sourceTerritory, action.destinationTerritory)
 }
 
 type MoveAction struct {

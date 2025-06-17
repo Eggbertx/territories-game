@@ -10,34 +10,28 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	joinActionResultFmt = "%s founded by %s in %s"
+)
+
 type JoinActionResult struct {
-	action *JoinAction
-	err    error
+	actionResultBase[*JoinAction]
 }
 
 func (jar *JoinActionResult) ActionType() string {
 	return "join"
 }
 
-func (jar *JoinActionResult) User() string {
-	if jar.action == nil {
-		return ""
-	}
-	return jar.action.user
-}
-
 func (jar *JoinActionResult) String() string {
-	if jar.action == nil {
+	str := jar.actionResultBase.String()
+	if str != "" {
+		return str
+	}
+	action := *jar.action
+	if action == nil {
 		return noActionString
 	}
-	if jar.action.user == "" {
-		jar.err = ErrMissingUser
-	}
-
-	if jar.err == nil {
-		return fmt.Sprintf("%s founded %s in %s", jar.action.user, jar.action.nation, jar.action.territory)
-	}
-	return jar.err.Error()
+	return fmt.Sprintf(joinActionResultFmt, action.nation, action.user, action.territory)
 }
 
 type JoinAction struct {
@@ -123,8 +117,12 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		errEv.Err(err).Caller().Msg("Unable to commit transaction")
 		return nil, err
 	}
-	infoEv.Str("territory", joinTerritory.Name).Msg("Added new user")
-	return nil, nil
+
+	var result JoinActionResult
+	result.action = &ja
+
+	infoEv.Str("territory", joinTerritory.Name).Msg(result.String())
+	return &result, nil
 }
 
 func joinActionParser(s ...string) (Action, error) {

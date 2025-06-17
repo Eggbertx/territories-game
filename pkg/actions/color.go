@@ -12,6 +12,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	colorActionResultFmt = "%s changed their nation's color to %s"
+)
+
 type ColorActionResult struct {
 	actionResultBase[*ColorAction]
 }
@@ -27,7 +31,7 @@ func (car *ColorActionResult) String() string {
 	}
 	action := *car.action
 
-	return fmt.Sprintf("%s changed their nation's color to %s", action.user, action.color)
+	return fmt.Sprintf(colorActionResultFmt, action.user, action.color)
 }
 
 type ColorAction struct {

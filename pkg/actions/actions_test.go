@@ -330,6 +330,31 @@ var (
 				assert.LessOrEqual(t, defendingArmySize, 3)
 				assert.LessOrEqual(t, attackingArmySize, 3)
 			},
+			doValidateResults: func(t *testing.T, results []ActionResult) {
+				if !assert.Len(t, results, 3, results) {
+					t.FailNow()
+				}
+				aar := results[2].(*AttackActionResult)
+				assert.Equal(t, "Test User", aar.user)
+				action := *aar.action
+				assert.Equal(t, "CA", action.attackingTerritory)
+				assert.Equal(t, "NV", action.defendingTerritory)
+				if aar.dieRoll >= 19 {
+					assert.Greater(t, aar.losses, 0)
+				} else if aar.dieRoll >= 13 {
+					if aar.losses >= aar.attacking+1 {
+						assert.Greater(t, 0, aar.losses)
+					} else {
+						assert.Less(t, 0, aar.losses)
+					}
+				} else if aar.dieRoll >= 11 && aar.attacking == aar.defending {
+					assert.Greater(t, aar.losses, 0)
+				} else if aar.dieRoll >= 9 && aar.attacking > aar.defending {
+					assert.Greater(t, 0, aar.losses)
+				} else {
+					assert.LessOrEqual(t, aar.losses, 0)
+				}
+			},
 		},
 		{
 			desc: "no armies in defending territory",
@@ -653,6 +678,7 @@ type actionsTestCase struct {
 	expectError       bool
 	beforeEachEvent   func(*testing.T, *sql.DB, int) error
 	doValidateQueries func(*testing.T, *sql.DB, error)
+	doValidateResults func(*testing.T, []ActionResult)
 
 	db *sql.DB
 }
@@ -671,6 +697,8 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 		db.CloseDB()
 	}()
 	var errAction Action
+	var results []ActionResult
+	var result ActionResult
 	for e, event := range tc.events {
 		if tc.beforeEachEvent != nil {
 			err = tc.beforeEachEvent(t, tc.db, e)
@@ -679,7 +707,8 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 			}
 		}
 
-		_, err = event.DoAction(tc.db)
+		result, err = event.DoAction(tc.db)
+		results = append(results, result)
 		if err != nil {
 			errAction = event
 			break
@@ -694,6 +723,9 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 	if tc.doValidateQueries != nil {
 		tc.doValidateQueries(t, tc.db, err)
 		testInt = nil
+	}
+	if tc.doValidateResults != nil && !tc.expectError {
+		tc.doValidateResults(t, results)
 	}
 }
 

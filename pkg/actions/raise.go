@@ -9,6 +9,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	raiseActionResultFmt = "%s raised an army in %s"
+)
+
 type RaiseActionResult struct {
 	actionResultBase[*RaiseAction]
 }
@@ -26,7 +30,7 @@ func (rar *RaiseActionResult) String() string {
 	if action == nil {
 		return noActionString
 	}
-	return fmt.Sprintf("%s raised an army in %s", action.user, action.territory)
+	return fmt.Sprintf(raiseActionResultFmt, action.user, action.territory)
 }
 
 type RaiseAction struct {
