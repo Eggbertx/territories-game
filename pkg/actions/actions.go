@@ -15,7 +15,8 @@ var (
 	ErrNationAlreadyJoined      = errors.New("a nation with the given name already exists")
 	ErrTerritoryAlreadyOccupied = errors.New("the territory is already occupied")
 	ErrColorInUse               = errors.New("color already in use by another player")
-	testInt                     *int // for testing purposes, to avoid random number generation in tests
+	testInt                     int // for testing purposes, to avoid random number generation in tests
+	useTestInt                  bool
 
 	registeredActionParsers map[string]ActionParser = make(map[string]ActionParser)
 )

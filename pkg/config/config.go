@@ -15,17 +15,18 @@ var (
 )
 
 type Config struct {
-	MapFile               string      `json:"mapFile"`
-	DBFile                string      `json:"dbFile"`
-	LogFile               string      `json:"logFile"`
-	PrintLogToConsole     bool        `json:"printLogToConsole"`
-	SVGOutFile            string      `json:"svgOutFile"`
-	PNGOutFile            string      `json:"pngOutFile"`
-	DoCounterattack       bool        `json:"doCounterattack"`
-	MaxArmiesPerTerritory int         `json:"maxArmiesPerTerritory"`
-	InitialArmies         int         `json:"initialArmies"`
-	MinimumNationsToStart int         `json:"minimumNationsToStart"`
-	Territories           []Territory `json:"territories"`
+	MapFile                       string      `json:"mapFile"`
+	DBFile                        string      `json:"dbFile"`
+	LogFile                       string      `json:"logFile"`
+	PrintLogToConsole             bool        `json:"printLogToConsole"`
+	SVGOutFile                    string      `json:"svgOutFile"`
+	PNGOutFile                    string      `json:"pngOutFile"`
+	DoCounterattack               bool        `json:"doCounterattack"`
+	InitialArmies                 int         `json:"initialArmies"`
+	MinimumNationsToStart         int         `json:"minimumNationsToStart"`
+	MaxArmiesPerTerritory         int         `json:"maxArmiesPerTerritory"`
+	UnclaimedTerritoriesHave1Army bool        `json:"unclaimedTerritoriesHave1Army"`
+	Territories                   []Territory `json:"territories"`
 }
 
 func (tc *Config) ResolveTerritory(query string) (*Territory, error) {

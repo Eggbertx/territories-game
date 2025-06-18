@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
+	"testing"
 
 	"github.com/rs/zerolog"
 )
@@ -156,8 +158,8 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 }
 
 func randInt(max int) int {
-	if testInt != nil {
-		return *testInt % max
+	if testing.Testing() && useTestInt {
+		return int(math.Min(float64(testInt), float64(max))) - 1
 	}
 	return rand.Intn(max)
 }

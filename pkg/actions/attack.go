@@ -144,15 +144,19 @@ func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defending
 		return nil, err
 	}
 
-	x := randInt(20) + 1
+	x, losses, err := attackCalculation(attacking, defending)
+	if err != nil {
+		aa.logger.Err(err).Caller().Msg("Attack calculation failed")
+		return nil, err
+	}
+	config.LogInt("dieRoll", x, infoEv, errEv)
+	config.LogInt("attacking", attacking, infoEv, errEv)
+	config.LogInt("defending", defending, infoEv, errEv)
+	config.LogInt("losses", int(losses), infoEv, errEv)
 
 	success := x > (defending-attacking)*2+10
 	infoEv.Bool("success", success)
 
-	losses := math.Floor(0.5*float64(x) + float64(attacking-defending-5))
-	if success && losses == 0 {
-		losses = 1 // at least one army must be lost
-	}
 	var attackerLosses, defenderLosses int
 	if losses > 0 {
 		// defending armies destroyed
@@ -205,4 +209,32 @@ func attackActionParser(args ...string) (Action, error) {
 	}
 
 	return action, nil
+}
+
+func attackCalculation(attacking, defending int) (int, float64, error) {
+	if attacking <= 0 || defending <= 0 {
+		return 0, 0, fmt.Errorf("invalid army sizes: attacking=%d, defending=%d", attacking, defending)
+	}
+
+	x := randInt(20) + 1
+	success := x > (defending-attacking)*2+10
+
+	var losses float64
+	if success {
+		// attack successful, losses are on the defending side
+		losses = math.Floor(0.5*float64(x) + float64(attacking-defending-5))
+		if losses == 0 {
+			losses = 1
+		}
+		losses = math.Min(losses, float64(defending)) // cannot lose more armies than defending has
+	} else {
+		// attack failed, losses are on the attacking side (negative value)
+		losses = -math.Floor(0.5*float64(x) + float64(defending-attacking-5))
+		if x == 1 && losses >= 0 {
+			losses = -1 // critical failure, at least one army lost
+		}
+		losses = math.Max(losses, -float64(attacking)) // cannot lose more armies than attacking has
+	}
+
+	return x, losses, nil
 }

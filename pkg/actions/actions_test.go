@@ -3,6 +3,7 @@ package actions
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
@@ -339,21 +340,6 @@ var (
 				action := *aar.action
 				assert.Equal(t, "CA", action.attackingTerritory)
 				assert.Equal(t, "NV", action.defendingTerritory)
-				if aar.dieRoll >= 19 {
-					assert.Greater(t, aar.losses, 0)
-				} else if aar.dieRoll >= 13 {
-					if aar.losses >= aar.attacking+1 {
-						assert.Greater(t, 0, aar.losses)
-					} else {
-						assert.Less(t, 0, aar.losses)
-					}
-				} else if aar.dieRoll >= 11 && aar.attacking == aar.defending {
-					assert.Greater(t, aar.losses, 0)
-				} else if aar.dieRoll >= 9 && aar.attacking > aar.defending {
-					assert.Greater(t, 0, aar.losses)
-				} else {
-					assert.LessOrEqual(t, aar.losses, 0)
-				}
 			},
 		},
 		{
@@ -451,9 +437,9 @@ var (
 				},
 			},
 			beforeEachEvent: func(t *testing.T, d *sql.DB, i int) error {
-				if i > 1 && testInt == nil {
-					testInt = new(int)
-					*testInt = 19
+				if i > 1 {
+					useTestInt = true
+					testInt = 19
 				}
 				return nil
 			},
@@ -722,7 +708,7 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 	}
 	if tc.doValidateQueries != nil {
 		tc.doValidateQueries(t, tc.db, err)
-		testInt = nil
+		useTestInt = false
 	}
 	if tc.doValidateResults != nil && !tc.expectError {
 		tc.doValidateResults(t, results)
@@ -766,5 +752,58 @@ func TestMoveEvent(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			runActionTestCase(t, &tc)
 		})
+	}
+}
+
+func TestAttackCalculation(t *testing.T) {
+	var failedAttacks int
+	var numTests int
+	for i := 1; i <= 20; i++ {
+		testInt = i
+		useTestInt = true
+		for attacking := 0; attacking <= 5; attacking++ {
+			for defending := 0; defending <= 5; defending++ {
+				t.Run(fmt.Sprintf("%dv%d die=%d", attacking, defending, i), func(t *testing.T) {
+					numTests++
+					dieRoll, losses, err := attackCalculation(attacking, defending)
+					if losses < 0 {
+						failedAttacks++
+					}
+					if attacking == 0 || defending == 0 {
+						assert.Error(t, err, "an error should be returned if attacking or defending is 0")
+						return
+					}
+					assert.Condition(t, func() bool {
+						return losses <= float64(attacking) || -losses <= float64(defending)
+					}, "expected losses to not exceed the number of attacking or defending forces")
+
+					if dieRoll < 1 || dieRoll > 20 {
+						t.Fatalf("Expected die roll to be within [1:20], got %d", dieRoll)
+					}
+					if dieRoll == 20 {
+						assert.Greater(t, losses, 0.0, "expected losses to be greater than 0 on a die roll of 20")
+					} else if dieRoll >= 13 {
+						if defending == attacking+1 {
+							assert.Greater(t, losses, 0.0, "expected attack to succeed if defending fources outnumbered by 1")
+						}
+					} else if dieRoll >= 11 {
+						if attacking >= defending {
+							assert.Greater(t, losses, 0.0, "expected attack to succeed if attacking and defending forces are equal")
+						} else {
+							assert.LessOrEqual(t, losses, 0.0, "expected losses to be less than or equal to 0 if attacking forces are less than defending forces")
+						}
+					} else if dieRoll >= 9 {
+						if attacking > defending {
+							assert.Greater(t, losses, 0.0, "expected attack to succeed if attacking forces outnumber defending forces")
+						}
+					} else if dieRoll == 1 {
+						assert.Less(t, losses, 0.0, "attackers to have at least one loss on a die roll of 1")
+					}
+				})
+			}
+		}
+	}
+	if numTests > 1 {
+		assert.Greater(t, failedAttacks, 0, "expected some attacks to fail")
 	}
 }

@@ -9,6 +9,7 @@
 	"maxArmiesPerTerritory": 5,
 	"initialArmies": 3,
 	"minimumNationsToStart": 3,
+	"unclaimedTerritoriesHave1Army": true,
 	"territories": [
 		{
 			"abbr": "AL",
