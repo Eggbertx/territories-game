@@ -214,6 +214,12 @@ func CloseTestingConfig(t *testing.T) {
 	}
 }
 
+func SetConfig(c *Config) {
+	if c != nil {
+		cfg = c
+	}
+}
+
 type Territory struct {
 	Abbreviation string   `json:"abbr"`
 	Name         string   `json:"name"`

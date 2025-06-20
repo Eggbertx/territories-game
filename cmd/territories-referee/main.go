@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"os"
-	"slices"
-	"strconv"
 
 	"github.com/Eggbertx/territories-game/pkg/actions"
 	"github.com/Eggbertx/territories-game/pkg/config"
@@ -15,8 +13,6 @@ import (
 )
 
 var (
-	validActions []string
-
 	logger   zerolog.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 	usageStr                = "Usage: territories-referee join|color|raise|move|attack|help -user <user> -json [...]"
 )
@@ -54,17 +50,12 @@ func main() {
 	if len(os.Args) < 2 {
 		usage(false, true)
 	}
-	validActions := actions.RegisteredActionParsers()
-	if !slices.Contains(validActions, os.Args[1]) {
-		logger.Fatal().Msgf("Invalid action '%s', valid actions are: %v", os.Args[1], validActions)
-	}
 
 	actionType := os.Args[1]
 
 	var user string
-	var actionArgs []string
 	var armies int
-
+	var action actions.Action
 	switch actionType {
 	case "join":
 		var nation string
@@ -75,7 +66,12 @@ func main() {
 		flagSet.StringVar(&nation, "nation", "", "the name of the nation the user is joining")
 		flagSet.StringVar(&territory, "territory", "", "the territory the user is joining")
 		flagSet.Parse(os.Args[2:])
-		actionArgs = []string{user, nation, territory}
+		action = &actions.JoinAction{
+			User:      user,
+			Nation:    nation,
+			Territory: territory,
+			Logger:    logger,
+		}
 	case "color":
 		var color string
 		flagSet := flag.NewFlagSet("", flag.ExitOnError)
@@ -83,7 +79,11 @@ func main() {
 		flagSet.BoolVar(&jsonOutput, "json", false, "log output in JSON format")
 		flagSet.StringVar(&color, "color", "", "the new color for the user")
 		flagSet.Parse(os.Args[2:])
-		actionArgs = []string{user, color}
+		action = &actions.ColorAction{
+			User:   user,
+			Color:  color,
+			Logger: logger,
+		}
 	case "raise":
 		var territory string
 		flagSet := flag.NewFlagSet("", flag.ExitOnError)
@@ -91,7 +91,11 @@ func main() {
 		flagSet.BoolVar(&jsonOutput, "json", false, "log output in JSON format")
 		flagSet.StringVar(&territory, "territory", "", "the territory where the user is raising the army size")
 		flagSet.Parse(os.Args[2:])
-		actionArgs = []string{user, territory}
+		action = &actions.RaiseAction{
+			User:      user,
+			Territory: territory,
+			Logger:    logger,
+		}
 	case "move":
 		var sourceTerritory string
 		var destinationTerritory string
@@ -102,10 +106,12 @@ func main() {
 		flagSet.StringVar(&sourceTerritory, "source", "", "the territory from which the user is moving armies")
 		flagSet.StringVar(&destinationTerritory, "destination", "", "the territory to which the user is moving armies")
 		flagSet.Parse(os.Args[2:])
-		if armies > 0 {
-			actionArgs = []string{user, strconv.Itoa(armies), sourceTerritory, destinationTerritory}
-		} else {
-			actionArgs = []string{user, sourceTerritory, destinationTerritory}
+		action = &actions.MoveAction{
+			User:        user,
+			Armies:      armies,
+			Source:      sourceTerritory,
+			Destination: destinationTerritory,
+			Logger:      logger,
 		}
 	case "attack":
 		var attackingTerritory string
@@ -116,7 +122,12 @@ func main() {
 		flagSet.StringVar(&attackingTerritory, "attacking", "", "the territory from which the user is attacking")
 		flagSet.StringVar(&defendingTerritory, "defending", "", "the territory that is being attacked")
 		flagSet.Parse(os.Args[2:])
-		actionArgs = []string{user, attackingTerritory, defendingTerritory}
+		action = &actions.AttackAction{
+			User:               user,
+			AttackingTerritory: attackingTerritory,
+			DefendingTerritory: defendingTerritory,
+			Logger:             logger,
+		}
 	case "help", "-h":
 		usage(len(os.Args) > 2 && os.Args[2] == "-json", false)
 		os.Exit(0)
@@ -154,16 +165,6 @@ func main() {
 		}
 	}()
 
-	actionParser, err := actions.GetActionParser(actionType)
-	if err != nil {
-		fatalEv.Err(err).Caller().Msg("Unable to get action parser")
-	}
-
-	action, err := actionParser(actionArgs...)
-	if err != nil {
-		fatalEv.Err(err).Caller().Msgf("Unable to parse action parameters")
-	}
-	// var actionResult actions.ActionResult
 	if _, err = action.DoAction(db); err != nil {
 		os.Exit(1)
 	}

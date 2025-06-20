@@ -229,7 +229,7 @@ text.territory-label, #nations-title {
 	<text id="WV-label" class="territory-label" x="1461.778" y="576.094">WV</text>
 	<text id="VA-label" class="territory-label" x="1569.376" y="578.976">VA</text>
 	<text id="AK-label" class="territory-label" x="213.907" y="978.807">AK</text>
-	<text id="HI-label" class="territory-label" x="529.005" y="1109.132">HI</text>
+	<text id="HI-label" class="territory-label" x="585.000" y="1150.000">HI</text>
 	<text id="KY-label" class="territory-label" x="1362.750" y="605.994">KY</text>
 	<text id="ME-label" class="territory-label" x="1779.676" y="163.130">ME</text>
 	<text id="VT-label" class="territory-label" x="1674.959" y="146.336">VT</text>
@@ -248,11 +248,11 @@ text.territory-label, #nations-title {
 	<path id="DE-line" class="state-pointer-line" d="m 1692.6064,500.80871 143.8274,91.22747" />
 	<text id="MD-label" class="territory-label" x="1842.097" y="647.581">MD</text>
 	<path id="MD-line" class="state-pointer-line" d="m 1694.6933,522.33629 141.1527,109.75168"/>
-	<text id="PR-label" class="territory-label" x="1110" y="1100">PR</text>
-	<text id="VI-label" class="territory-label" x="1340.662" y="1113.475">VI</text>
-	<text id="GU-label" class="territory-label" x="1080" y="1180">GU</text>
-	<text id="AS-label" class="territory-label" x="1268.274" y="1195.0">AS</text>
-	<text id="MP-label" class="territory-label" x="1334.739" y="1195.0">MP</text>
+	<text id="PR-label" class="territory-label" x="1130" y="1100">PR</text>
+	<text id="VI-label" class="territory-label" x="1355.662" y="1113.475">VI</text>
+	<text id="GU-label" class="territory-label" x="1090" y="1180">GU</text>
+	<text id="AS-label" class="territory-label" x="1250.274" y="1195.0">AS</text>
+	<text id="MP-label" class="territory-label" x="1350.739" y="1195.0">MP</text>
 	<text id="DC-label" class="territory-label" x="1841.643" y="696.186">DC</text>
 	<path id="DC-line" class="state-pointer-line" d="m 1633.9901,510.7517 202.4437,165.56694" />
 

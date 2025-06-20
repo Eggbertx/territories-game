@@ -31,15 +31,15 @@ func (jar *JoinActionResult) String() string {
 	if action == nil {
 		return noActionString
 	}
-	return fmt.Sprintf(joinActionResultFmt, action.nation, action.user, action.territory)
+	return fmt.Sprintf(joinActionResultFmt, action.Nation, action.User, action.Territory)
 }
 
 type JoinAction struct {
-	user      string
-	nation    string
-	territory string
+	User      string
+	Nation    string
+	Territory string
 
-	logger zerolog.Logger
+	Logger zerolog.Logger
 }
 
 func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
@@ -50,20 +50,20 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	infoEv := ja.logger.Info()
-	errEv := ja.logger.Err(nil)
-	config.LogString("nation", ja.nation, infoEv, errEv)
-	config.LogString("territory", ja.territory, infoEv, errEv)
+	infoEv := ja.Logger.Info()
+	errEv := ja.Logger.Err(nil)
+	config.LogString("nation", ja.Nation, infoEv, errEv)
+	config.LogString("territory", ja.Territory, infoEv, errEv)
 	defer config.DiscardLogEvents(infoEv, errEv)
 
-	if ja.nation == "" {
-		ja.nation = fmt.Sprintf("%s's Nation", ja.user)
+	if ja.Nation == "" {
+		ja.Nation = fmt.Sprintf("%s's Nation", ja.User)
 	}
-	if ja.territory == "" {
-		ja.logger.Err(ErrNoTargetTerritory).Caller().Send()
+	if ja.Territory == "" {
+		ja.Logger.Err(ErrNoTargetTerritory).Caller().Send()
 		return nil, ErrNoTargetTerritory
 	}
-	joinTerritory, err := cfg.ResolveTerritory(ja.territory)
+	joinTerritory, err := cfg.ResolveTerritory(ja.Territory)
 	if err != nil {
 		errEv.Err(err).Caller().Send()
 		return nil, err
@@ -84,7 +84,7 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		?, ?)`
 	var numPlayerMatches int
 	var numNationMatches int
-	if err = tx.QueryRow(userAlreadyJoinedSQL, ja.user).Scan(&numPlayerMatches); err != nil {
+	if err = tx.QueryRow(userAlreadyJoinedSQL, ja.User).Scan(&numPlayerMatches); err != nil {
 		errEv.Err(err).Caller().Send()
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, ErrPlayerAlreadyJoined
 	}
 
-	if err = tx.QueryRow(nationAlreadyJoinedSQL, ja.nation).Scan(&numNationMatches); err != nil {
+	if err = tx.QueryRow(nationAlreadyJoinedSQL, ja.Nation).Scan(&numNationMatches); err != nil {
 		errEv.Err(err).Caller().Send()
 		return nil, err
 	}
@@ -102,11 +102,11 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, ErrNationAlreadyJoined
 	}
 
-	if _, err = tx.Exec(nationAddSQL, ja.nation, ja.user, randomColor()); err != nil {
+	if _, err = tx.Exec(nationAddSQL, ja.Nation, ja.User, randomColor()); err != nil {
 		errEv.Err(err).Caller().Msg("Unable to add nation")
 		return nil, err
 	}
-	if _, err = tx.Exec(nationInitialHolding, ja.nation, joinTerritory.Abbreviation, cfg.InitialArmies); err != nil {
+	if _, err = tx.Exec(nationInitialHolding, ja.Nation, joinTerritory.Abbreviation, cfg.InitialArmies); err != nil {
 		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
 			err = ErrTerritoryAlreadyOccupied
 		}
@@ -123,33 +123,4 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 
 	infoEv.Str("territory", joinTerritory.Name).Msg(result.String())
 	return &result, nil
-}
-
-func joinActionParser(s ...string) (Action, error) {
-	// arg[0] = user
-	// arg[1] = nation name
-	// arg[2] = territory
-	var err error
-
-	if len(s) < 1 {
-		return nil, ErrMissingUser
-	}
-	var action JoinAction
-	action.user = s[0]
-	if len(s) < 2 {
-		action.nation = fmt.Sprintf("%s's Nation", s[0])
-	} else {
-		action.nation = s[1]
-	}
-
-	if len(s) < 3 {
-		return nil, ErrNoTargetTerritory
-	}
-	action.territory = s[2]
-	action.logger, err = config.GetLogger()
-	if err != nil {
-		action.logger.Err(err).Caller().Msg("Unable to get logger")
-		return nil, err
-	}
-	return &action, nil
 }

@@ -68,7 +68,7 @@ func PlayerHoldings(db *sql.DB, tx *sql.Tx, player string, logger zerolog.Logger
 
 // UpdateHoldingArmySize updates the army size of a holding in the database. If deleteNationIfNoTerritories is true and the size is 0,
 // it will remove the nation from play if it has no remaining territories.
-func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool, logger zerolog.Logger) error {
+func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool, logger zerolog.Logger) (bool, error) {
 	var stmt *sql.Stmt
 	var err error
 	shouldCommit := tx == nil
@@ -76,7 +76,7 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 		tx, err = db.Begin()
 		if err != nil {
 			logger.Err(err).Caller().Msg("Unable to begin transaction")
-			return err
+			return false, err
 		}
 		defer tx.Rollback()
 	}
@@ -84,7 +84,7 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 	stmt, err = tx.Prepare("SELECT player FROM v_nation_holdings WHERE territory = ?")
 	if err != nil {
 		logger.Err(err).Caller().Msg("Unable to prepare get defending nation statement")
-		return err
+		return false, err
 	}
 	defer stmt.Close()
 	var defendingNationPlayer string
@@ -94,24 +94,24 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 			logger.Err(err).Caller().Send()
 		}
 		logger.Err(err).Caller().Msg("Unable to get territory nation")
-		return err
+		return false, err
 	}
 	if err = stmt.Close(); err != nil {
 		logger.Err(err).Caller().Msg("Unable to close get nation statement")
-		return err
+		return false, err
 	}
 
 	if size > 0 {
 		if stmt, err = tx.Prepare("UPDATE holdings SET army_size = ? WHERE territory = ?"); err != nil {
 			logger.Err(err).Caller().Msg("Unable to prepare update holding army size statement")
-			return err
+			return false, err
 		}
 		defer stmt.Close()
 		stmt.Exec(size, territory)
 	} else {
 		if stmt, err = tx.Prepare("DELETE FROM holdings WHERE territory = ?"); err != nil {
 			logger.Err(err).Caller().Msg("Unable to prepare delete holding statement")
-			return err
+			return false, err
 		}
 		defer stmt.Close()
 		stmt.Exec(territory)
@@ -121,40 +121,42 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 	}
 	if err = stmt.Close(); err != nil {
 		logger.Err(err).Caller().Msg("Unable to close update holding statement")
-		return err
+		return false, err
 	}
 
+	var nationRemoved bool
 	if size == 0 && deleteNationIfNoTerritories {
 		territoryCount, err := PlayerHoldings(db, tx, defendingNationPlayer, logger)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if territoryCount == 0 {
 			if stmt, err = tx.Prepare(`DELETE FROM nations WHERE player = ?`); err != nil {
 				logger.Err(err).Caller().Msg("Unable to prepare delete nation statement")
-				return err
+				return false, err
 			}
 			defer stmt.Close()
 			if _, err = stmt.Exec(defendingNationPlayer); err != nil {
 				logger.Err(err).Caller().Msg("Unable to delete nation")
-				return err
+				return false, err
 			}
 			if err = stmt.Close(); err != nil {
 				logger.Err(err).Caller().Msg("Unable to close delete nation statement")
-				return err
+				return false, err
 			}
 			logger.Info().Msgf("Player %s has no territories left, nation removed from play", defendingNationPlayer)
+			nationRemoved = true
 		}
 	}
 
 	if shouldCommit {
 		if err = tx.Commit(); err != nil {
 			logger.Err(err).Caller().Msg("Unable to commit transaction")
-			return err
+			return false, err
 		}
 	}
 
-	return err
+	return nationRemoved, err
 }
 
 func randInt(max int) int {

@@ -18,10 +18,11 @@ const (
 
 type AttackActionResult struct {
 	actionResultBase[*AttackAction]
-	dieRoll   int
-	attacking int
-	defending int
-	losses    int
+	dieRoll       int
+	attacking     int
+	defending     int
+	losses        int
+	nationRemoved bool
 }
 
 func (aar *AttackActionResult) ActionType() string {
@@ -38,55 +39,55 @@ func (aar *AttackActionResult) String() string {
 		return noActionString
 	}
 	if aar.losses == 0 {
-		return fmt.Sprintf(attackActionStalemateFmt, action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll)
+		return fmt.Sprintf(attackActionStalemateFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.dieRoll)
 	}
 	if aar.losses > 0 {
-		return fmt.Sprintf(attackActionSuccessFmt, action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll, aar.losses)
+		return fmt.Sprintf(attackActionSuccessFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.dieRoll, aar.losses)
 	}
-	return fmt.Sprintf(attackActionFailureFmt, action.user, action.defendingTerritory, action.attackingTerritory, aar.dieRoll, -aar.losses)
+	return fmt.Sprintf(attackActionFailureFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.dieRoll, -aar.losses)
 }
 
 type AttackAction struct {
-	user               string
-	attackingTerritory string
-	defendingTerritory string
-	logger             zerolog.Logger
+	User               string
+	AttackingTerritory string
+	DefendingTerritory string
+	Logger             zerolog.Logger
 }
 
 func (aa *AttackAction) DoAction(db *sql.DB) (ActionResult, error) {
 	cfg, _ := config.GetConfig()
 
-	err := ValidateUser(aa.user, db, aa.logger)
+	err := ValidateUser(aa.User, db, aa.Logger)
 	if err != nil {
 		return nil, err
 	}
 
-	attackingTerritory, err := cfg.ResolveTerritory(aa.attackingTerritory)
+	attackingTerritory, err := cfg.ResolveTerritory(aa.AttackingTerritory)
 	if err != nil {
-		aa.logger.Err(err).Caller().Send()
+		aa.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 
-	defendingTerritory, err := cfg.ResolveTerritory(aa.defendingTerritory)
+	defendingTerritory, err := cfg.ResolveTerritory(aa.DefendingTerritory)
 	if err != nil {
-		aa.logger.Err(err).Caller().Send()
+		aa.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 
 	if attackingTerritory.Abbreviation == defendingTerritory.Abbreviation {
 		err = fmt.Errorf("cannot attack %s from %s: friendly fire not allowed", defendingTerritory.Name, attackingTerritory.Name)
-		aa.logger.Err(err).Caller().Send()
+		aa.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 
-	neighbors, err := attackingTerritory.IsNeighboring(aa.defendingTerritory)
+	neighbors, err := attackingTerritory.IsNeighboring(aa.DefendingTerritory)
 	if err != nil {
-		aa.logger.Err(err).Caller().Send()
+		aa.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 	if !neighbors {
 		err = fmt.Errorf("cannot attack %s from %s: not a neighboring territory", defendingTerritory.Name, attackingTerritory.Name)
-		aa.logger.Err(err).Caller().Send()
+		aa.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 
@@ -97,56 +98,56 @@ func (aa *AttackAction) DoAction(db *sql.DB) (ActionResult, error) {
 }
 
 func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {
-	infoEv := aa.logger.Info()
-	errEv := aa.logger.Err(nil)
+	infoEv := aa.Logger.Info()
+	errEv := aa.Logger.Err(nil)
 	defer config.DiscardLogEvents(infoEv, errEv)
 
 	var attacking, defending int
 	const attackSQL = `SELECT army_size FROM v_nation_holdings WHERE territory = ?`
 	stmt, err := db.Prepare(attackSQL + "  AND player = ?")
 	if err != nil {
-		aa.logger.Err(err).Caller().Msg("Unable to prepare attack query")
+		aa.Logger.Err(err).Caller().Msg("Unable to prepare attack query")
 		return nil, err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(attackingTerritory.Abbreviation, aa.user).Scan(&attacking)
+	err = stmt.QueryRow(attackingTerritory.Abbreviation, aa.User).Scan(&attacking)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		aa.logger.Err(err).Caller().Msg("Unable to get attacking army size")
+		aa.Logger.Err(err).Caller().Msg("Unable to get attacking army size")
 		return nil, err
 	}
 	if attacking == 0 {
-		err = fmt.Errorf("no armies in %s controlled by %s to attack with", attackingTerritory.Name, aa.user)
-		aa.logger.Err(err).Caller().Send()
+		err = fmt.Errorf("no armies in %s controlled by %s to attack with", attackingTerritory.Name, aa.User)
+		aa.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 
 	if err = stmt.Close(); err != nil {
-		aa.logger.Err(err).Caller().Msg("Unable to close statement")
+		aa.Logger.Err(err).Caller().Msg("Unable to close statement")
 		return nil, err
 	}
 
 	stmt, err = db.Prepare(attackSQL)
 	if err != nil {
-		aa.logger.Err(err).Caller().Msg("Unable to prepare defending query")
+		aa.Logger.Err(err).Caller().Msg("Unable to prepare defending query")
 		return nil, err
 	}
 	defer stmt.Close()
 
 	err = stmt.QueryRow(defendingTerritory.Abbreviation).Scan(&defending)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		aa.logger.Err(err).Caller().Msg("Unable to get defending army size")
+		aa.Logger.Err(err).Caller().Msg("Unable to get defending army size")
 		return nil, err
 	}
 	if defending == 0 {
 		err = fmt.Errorf("no armies in %s", defendingTerritory.Name)
-		aa.logger.Err(err).Caller().Send()
+		aa.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 
 	x, losses, err := attackCalculation(attacking, defending)
 	if err != nil {
-		aa.logger.Err(err).Caller().Msg("Attack calculation failed")
+		aa.Logger.Err(err).Caller().Msg("Attack calculation failed")
 		return nil, err
 	}
 	config.LogInt("dieRoll", x, infoEv, errEv)
@@ -158,26 +159,28 @@ func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defending
 	infoEv.Bool("success", success)
 
 	var attackerLosses, defenderLosses int
+	var nationRemoved bool
 	if losses > 0 {
 		// defending armies destroyed
 		defenderLosses = int(math.Min(losses, float64(defending)))
 		config.LogInt("defenderLosses", defenderLosses, infoEv, errEv)
-		err = UpdateHoldingArmySize(db, nil, defendingTerritory.Abbreviation, defending-defenderLosses, true, aa.logger)
+		nationRemoved, err = UpdateHoldingArmySize(db, nil, defendingTerritory.Abbreviation, defending-defenderLosses, true, aa.Logger)
 	} else {
 		// attacking armies destroyed
 		attackerLosses = int(math.Min(math.Abs(losses), float64(attacking)))
 		config.LogInt("attackerLosses", attackerLosses, infoEv, errEv)
-		err = UpdateHoldingArmySize(db, nil, attackingTerritory.Abbreviation, attacking-attackerLosses, true, aa.logger)
+		nationRemoved, err = UpdateHoldingArmySize(db, nil, attackingTerritory.Abbreviation, attacking-attackerLosses, true, aa.Logger)
 	}
 	if err != nil {
 		return nil, err
 	}
 	result := &AttackActionResult{
-		actionResultBase: actionResultBase[*AttackAction]{action: &aa, user: aa.user},
+		actionResultBase: actionResultBase[*AttackAction]{action: &aa, user: aa.User},
 		dieRoll:          x,
 		attacking:        attacking,
 		defending:        defending,
 		losses:           defenderLosses,
+		nationRemoved:    nationRemoved,
 	}
 	return result, nil
 }
@@ -185,30 +188,6 @@ func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defending
 func (aa *AttackAction) doAttackWithCounter(db *sql.DB, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {
 	// Placeholder for Advance Wars-style attack logic
 	return nil, errors.New("counterattack logic not implemented yet")
-}
-
-func attackActionParser(args ...string) (Action, error) {
-	if len(args) < 3 {
-		return nil, fmt.Errorf("attack action requires 3 arguments: user, attacking territory, defending territory")
-	}
-	action := &AttackAction{
-		user:               args[0],
-		attackingTerritory: args[1],
-		defendingTerritory: args[2],
-	}
-
-	if action.user == "" {
-		return nil, ErrMissingUser
-	}
-
-	var err error
-	action.logger, err = config.GetLogger()
-	if err != nil {
-		action.logger.Err(err).Caller().Msg("Failed to get logger for attack action")
-		return nil, fmt.Errorf("failed to get logger: %w", err)
-	}
-
-	return action, nil
 }
 
 func attackCalculation(attacking, defending int) (int, float64, error) {

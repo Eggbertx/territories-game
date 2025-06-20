@@ -17,14 +17,14 @@ var (
 			desc: "valid join events",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "",
-					territory: "NV",
+					User:      "Test User 2",
+					Nation:    "",
+					Territory: "NV",
 				},
 			},
 			expectError: false,
@@ -33,14 +33,14 @@ var (
 			desc: "reject join from duplicate user",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 2",
-					territory: "NV",
+					User:      "Test User",
+					Nation:    "Nation 2",
+					Territory: "NV",
 				},
 			},
 			expectError: true,
@@ -49,14 +49,14 @@ var (
 			desc: "reject join with duplicate nation name",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User 1",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User 1",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 1",
-					territory: "NV",
+					User:      "Test User 2",
+					Nation:    "Nation 1",
+					Territory: "NV",
 				},
 			},
 			expectError: true,
@@ -65,8 +65,8 @@ var (
 			desc: "don't reject join with missing nation name",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
@@ -85,14 +85,14 @@ var (
 			desc: "reject join, territory already occupied",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User 1",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User 1",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 2",
-					territory: "CA",
+					User:      "Test User 2",
+					Nation:    "Nation 2",
+					Territory: "CA",
 				},
 			},
 			expectError: true,
@@ -122,21 +122,21 @@ var (
 			desc: "valid color changes",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&ColorAction{
-					user:  "Test User",
-					color: "white",
+					User:  "Test User",
+					Color: "white",
 				},
 				&ColorAction{
-					user:  "Test User",
-					color: "ffffff",
+					User:  "Test User",
+					Color: "ffffff",
 				},
 				&ColorAction{
-					user:  "Test User",
-					color: "#ffffff",
+					User:  "Test User",
+					Color: "#ffffff",
 				},
 			},
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
@@ -155,13 +155,13 @@ var (
 			desc: "reject invalid color",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&ColorAction{
-					user:  "Test User",
-					color: "invalidcolor",
+					User:  "Test User",
+					Color: "invalidcolor",
 				},
 			},
 			expectError: true,
@@ -170,13 +170,13 @@ var (
 			desc: "don't allow changing someone else's color",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User 1",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User 1",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&ColorAction{
-					user:  "Test User 2",
-					color: "ffffff",
+					User:  "Test User 2",
+					Color: "ffffff",
 				},
 			},
 			expectError: true,
@@ -185,22 +185,22 @@ var (
 			desc: "don't allow duplicate color",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User 1",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User 1",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 2",
-					territory: "NV",
+					User:      "Test User 2",
+					Nation:    "Nation 2",
+					Territory: "NV",
 				},
 				&ColorAction{
-					user:  "Test User 1",
-					color: "ffffff",
+					User:  "Test User 1",
+					Color: "ffffff",
 				},
 				&ColorAction{
-					user:  "Test User 2",
-					color: "ffffff",
+					User:  "Test User 2",
+					Color: "ffffff",
 				},
 			},
 			expectError: true,
@@ -227,8 +227,8 @@ var (
 			desc: "reject unregistered user",
 			events: []Action{
 				&ColorAction{
-					user:  "Unregistered User",
-					color: "ffffff",
+					User:  "Unregistered User",
+					Color: "ffffff",
 				},
 			},
 			expectError: true,
@@ -246,14 +246,14 @@ var (
 			desc: "invalid attack territory",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&AttackAction{
-					user:               "Test User",
-					attackingTerritory: "lol",
-					defendingTerritory: "CA",
+					User:               "Test User",
+					AttackingTerritory: "lol",
+					DefendingTerritory: "CA",
 				},
 			},
 			expectError: true,
@@ -265,14 +265,14 @@ var (
 			desc: "can't attack own territory",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&AttackAction{
-					user:               "Test User",
-					attackingTerritory: "CA",
-					defendingTerritory: "CA",
+					User:               "Test User",
+					AttackingTerritory: "CA",
+					DefendingTerritory: "CA",
 				},
 			},
 			expectError: true,
@@ -284,9 +284,9 @@ var (
 			desc: "reject attack from unregistered user",
 			events: []Action{
 				&AttackAction{
-					user:               "Unregistered User",
-					attackingTerritory: "CA",
-					defendingTerritory: "NV",
+					User:               "Unregistered User",
+					AttackingTerritory: "CA",
+					DefendingTerritory: "NV",
 				},
 			},
 			expectError: true,
@@ -302,19 +302,19 @@ var (
 			desc: "valid attack",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 2",
-					territory: "NV",
+					User:      "Test User 2",
+					Nation:    "Nation 2",
+					Territory: "NV",
 				},
 				&AttackAction{
-					user:               "Test User",
-					attackingTerritory: "CA",
-					defendingTerritory: "NV",
+					User:               "Test User",
+					AttackingTerritory: "CA",
+					DefendingTerritory: "NV",
 				},
 			},
 			doValidateQueries: func(t *testing.T, d *sql.DB, _ error) {
@@ -338,22 +338,22 @@ var (
 				aar := results[2].(*AttackActionResult)
 				assert.Equal(t, "Test User", aar.user)
 				action := *aar.action
-				assert.Equal(t, "CA", action.attackingTerritory)
-				assert.Equal(t, "NV", action.defendingTerritory)
+				assert.Equal(t, "CA", action.AttackingTerritory)
+				assert.Equal(t, "NV", action.DefendingTerritory)
 			},
 		},
 		{
 			desc: "no armies in defending territory",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&AttackAction{
-					user:               "Test User",
-					attackingTerritory: "CA",
-					defendingTerritory: "NV",
+					User:               "Test User",
+					AttackingTerritory: "CA",
+					DefendingTerritory: "NV",
 				},
 			},
 			expectError: true,
@@ -365,19 +365,19 @@ var (
 			desc: "no armies in attacking territory",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 2",
-					territory: "NV",
+					User:      "Test User 2",
+					Nation:    "Nation 2",
+					Territory: "NV",
 				},
 				&AttackAction{
-					user:               "Test User",
-					attackingTerritory: "UT",
-					defendingTerritory: "NV",
+					User:               "Test User",
+					AttackingTerritory: "UT",
+					DefendingTerritory: "NV",
 				},
 			},
 			expectError: true,
@@ -389,19 +389,19 @@ var (
 			desc: "can't attack non-neighboring territory",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "AZ",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "AZ",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 2",
-					territory: "OR",
+					User:      "Test User 2",
+					Nation:    "Nation 2",
+					Territory: "OR",
 				},
 				&AttackAction{
-					user:               "Test User",
-					attackingTerritory: "AZ",
-					defendingTerritory: "OR",
+					User:               "Test User",
+					AttackingTerritory: "AZ",
+					DefendingTerritory: "OR",
 				},
 			},
 			expectError: true,
@@ -413,27 +413,27 @@ var (
 			desc: "nation is eliminated if no territories left",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 2",
-					territory: "NV",
+					User:      "Test User 2",
+					Nation:    "Nation 2",
+					Territory: "NV",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&AttackAction{
-					user:               "Test User",
-					attackingTerritory: "CA",
-					defendingTerritory: "NV",
+					User:               "Test User",
+					AttackingTerritory: "CA",
+					DefendingTerritory: "NV",
 				},
 			},
 			beforeEachEvent: func(t *testing.T, d *sql.DB, i int) error {
@@ -462,17 +462,17 @@ var (
 			desc: "valid raise event",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
@@ -488,29 +488,29 @@ var (
 			desc: "enforce max raise limit",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 			},
 			expectError: true,
@@ -528,13 +528,13 @@ var (
 			desc: "raise in unowned territory",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "NV",
+					User:      "Test User",
+					Territory: "NV",
 				},
 			},
 			expectError: true,
@@ -549,8 +549,8 @@ var (
 			desc: "raise from unregistered user",
 			events: []Action{
 				&RaiseAction{
-					user:      "Unregistered User",
-					territory: "CA",
+					User:      "Unregistered User",
+					Territory: "CA",
 				},
 			},
 			expectError: true,
@@ -568,14 +568,14 @@ var (
 			desc: "valid move event (all units)",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&MoveAction{
-					user:                 "Test User",
-					sourceTerritory:      "CA",
-					destinationTerritory: "NV",
+					User:        "Test User",
+					Source:      "CA",
+					Destination: "NV",
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
@@ -595,19 +595,19 @@ var (
 			desc: "valid move event (some units)",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&RaiseAction{
-					user:      "Test User",
-					territory: "CA",
+					User:      "Test User",
+					Territory: "CA",
 				},
 				&MoveAction{
-					user:                 "Test User",
-					sourceTerritory:      "CA",
-					destinationTerritory: "NV",
-					armies:               1,
+					User:        "Test User",
+					Source:      "CA",
+					Destination: "NV",
+					Armies:      1,
 				},
 			},
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
@@ -629,19 +629,19 @@ var (
 			desc: "territory already occupied",
 			events: []Action{
 				&JoinAction{
-					user:      "Test User",
-					nation:    "Nation 1",
-					territory: "CA",
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
 				},
 				&JoinAction{
-					user:      "Test User 2",
-					nation:    "Nation 2",
-					territory: "NV",
+					User:      "Test User 2",
+					Nation:    "Nation 2",
+					Territory: "NV",
 				},
 				&MoveAction{
-					user:                 "Test User",
-					sourceTerritory:      "CA",
-					destinationTerritory: "NV",
+					User:        "Test User",
+					Source:      "CA",
+					Destination: "NV",
 				},
 			},
 			expectError: true,
@@ -653,6 +653,120 @@ var (
 					t.FailNow()
 				}
 				assert.Equal(t, 3, armySize, "expected no units moved from CA due to occupation of NV")
+			},
+		},
+		{
+			desc: "move to territory with invasion check (success)",
+			beforeEachEvent: func(t *testing.T, db *sql.DB, i int) error {
+				useTestInt = true
+				testInt = 19
+				cfg, _ := config.GetConfig()
+				cfg.UnclaimedTerritoriesHave1Army = true
+				config.SetConfig(cfg)
+				return nil
+			},
+			events: []Action{
+				&JoinAction{
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
+				},
+				&RaiseAction{
+					User:      "Test User",
+					Territory: "CA",
+				},
+				&MoveAction{
+					User:        "Test User",
+					Source:      "CA",
+					Destination: "NV",
+				},
+			},
+			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
+				var armySize int
+				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				assert.ErrorIs(t, err, sql.ErrNoRows)
+
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'NV'").Scan(&armySize)
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				assert.Equal(t, 4, armySize)
+			},
+		},
+		{
+			desc: "move to territory with invasion check (failure)",
+			beforeEachEvent: func(t *testing.T, db *sql.DB, i int) error {
+				useTestInt = true
+				testInt = 1
+				cfg, _ := config.GetConfig()
+				cfg.UnclaimedTerritoriesHave1Army = true
+				config.SetConfig(cfg)
+				return nil
+			},
+			events: []Action{
+				&JoinAction{
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
+				},
+				&MoveAction{
+					User:        "Test User",
+					Source:      "CA",
+					Destination: "NV",
+				},
+			},
+			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
+				var armySize int
+				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				assert.ErrorIs(t, err, sql.ErrNoRows)
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'NV'").Scan(&armySize)
+				assert.NoError(t, err)
+				assert.Equal(t, 2, armySize, "expected 2 armies in NV after failed invasion attempt")
+			},
+		},
+		{
+			desc: "move to territory with invasion check (failure, player eliminated)",
+			beforeEachEvent: func(t *testing.T, db *sql.DB, i int) error {
+				useTestInt = true
+				testInt = 1
+				cfg, _ := config.GetConfig()
+				cfg.UnclaimedTerritoriesHave1Army = true
+				config.SetConfig(cfg)
+				return nil
+			},
+			events: []Action{
+				&JoinAction{
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
+				},
+				&MoveAction{
+					User:        "Test User", // 3 -> 2
+					Source:      "CA",
+					Destination: "NV",
+				},
+				&MoveAction{
+					User:        "Test User", // 2 -> 1
+					Source:      "NV",
+					Destination: "CA",
+				},
+				&MoveAction{
+					User:        "Test User", // 1 -> 0, player eliminated
+					Source:      "CA",
+					Destination: "NV",
+				},
+			},
+			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
+				var num int
+				err = db.QueryRow("SELECT COALESCE(SUM(army_size),0) FROM v_nation_holdings WHERE player = 'Test User'").Scan(&num)
+				assert.NoError(t, err)
+				assert.Equal(t, 0, num, "expected Test User to have no armies left")
+				err = db.QueryRow("SELECT COUNT(*) FROM nations WHERE player = 'Test User'").Scan(&num)
+				assert.NoError(t, err)
+				assert.Equal(t, 0, num, "expected Test User to be eliminated")
 			},
 		},
 	}
@@ -670,8 +784,11 @@ type actionsTestCase struct {
 }
 
 func runActionTestCase(t *testing.T, tc *actionsTestCase) {
-	var err error
-	config.GetTestingConfig()
+	_, err := config.GetTestingConfig()
+	if !assert.NoError(t, err, "failed to get testing config") {
+		t.FailNow()
+	}
+
 	tc.db, err = db.GetDB()
 	if !assert.NoError(t, err, "failed to get test database") {
 		t.FailNow()
@@ -687,8 +804,7 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 	var result ActionResult
 	for e, event := range tc.events {
 		if tc.beforeEachEvent != nil {
-			err = tc.beforeEachEvent(t, tc.db, e)
-			if !assert.NoError(t, err) {
+			if err = tc.beforeEachEvent(t, tc.db, e); !assert.NoError(t, err) {
 				t.FailNow()
 			}
 		}
