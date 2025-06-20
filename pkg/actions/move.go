@@ -95,6 +95,7 @@ func (ma *MoveAction) DoAction(db *sql.DB) (ActionResult, error) {
 	if !isNeighboring {
 		err = fmt.Errorf("cannot move from %s to %s: not a neighboring territory", sourceTerritory.Name, destTerritory.Name)
 		ma.Logger.Err(err).Caller().Send()
+		return nil, err
 	}
 
 	var armiesInSourceTerritory, armiesInDestTerritory int
