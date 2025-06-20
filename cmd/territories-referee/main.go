@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/Eggbertx/territories-game/pkg/actions"
@@ -172,41 +171,35 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
+	infoEv := logger.Info()
+	defer infoEv.Discard()
 	switch result := actionResult.(type) {
 	case *actions.JoinActionResult:
 		action := *result.Action
-		logger = logger.With().
+		infoEv.
 			Str("nation", action.Nation).
-			Str("territory", action.Territory).
-			Logger()
+			Str("territory", action.Territory)
 	case *actions.ColorActionResult:
 		action := *result.Action
-		logger = logger.With().
-			Str("color", action.Color).
-			Logger()
+		infoEv.Str("color", action.Color)
 	case *actions.RaiseActionResult:
 		action := *result.Action
-		logger = logger.With().
-			Str("territory", action.Territory).
-			Logger()
+		infoEv.Str("territory", action.Territory)
 	case *actions.MoveActionResult:
 		action := *result.Action
-		logger = logger.With().
+		infoEv.
 			Str("source", action.Source).
 			Str("destination", action.Destination).
-			Int("armies", action.Armies).
-			Logger()
-		fmt.Println(result.FailedMove)
+			Int("armies", action.Armies)
 	case *actions.AttackActionResult:
 		action := *result.Action
-		logger = logger.With().
+		infoEv.
 			Str("attacking", action.AttackingTerritory).
-			Str("defending", action.DefendingTerritory).
-			Logger()
+			Str("defending", action.DefendingTerritory)
 	default:
 		fatalEv.Str("actionType", actionResult.ActionType()).Msg("unknown action result")
 	}
-	logger.Info().Msg(actionResult.String())
+	infoEv.Msg(actionResult.String())
 
 	if err = svgmap.ApplyDBEvents(); err != nil {
 		fatalEv.Err(err).Caller().Send()
