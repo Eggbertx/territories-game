@@ -26,7 +26,7 @@ func (rar *RaiseActionResult) String() string {
 	if str != "" {
 		return str
 	}
-	action := *rar.action
+	action := *rar.Action
 	if action == nil {
 		return noActionString
 	}
@@ -91,9 +91,10 @@ func (ra *RaiseAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	var result RaiseActionResult
-	result.action = &ra
-	result.user = ra.User
-	ra.Logger.Info().Msg(result.String())
-	return &result, nil
+	return &RaiseActionResult{
+		actionResultBase: actionResultBase[*RaiseAction]{
+			Action: &ra,
+			user:   ra.User,
+		},
+	}, nil
 }

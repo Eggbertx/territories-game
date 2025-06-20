@@ -27,7 +27,7 @@ func (jar *JoinActionResult) String() string {
 	if str != "" {
 		return str
 	}
-	action := *jar.action
+	action := *jar.Action
 	if action == nil {
 		return noActionString
 	}
@@ -118,9 +118,10 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	var result JoinActionResult
-	result.action = &ja
-
-	infoEv.Str("territory", joinTerritory.Name).Msg(result.String())
-	return &result, nil
+	return &JoinActionResult{
+		actionResultBase: actionResultBase[*JoinAction]{
+			Action: &ja,
+			user:   ja.User,
+		},
+	}, nil
 }

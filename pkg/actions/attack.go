@@ -18,11 +18,11 @@ const (
 
 type AttackActionResult struct {
 	actionResultBase[*AttackAction]
-	dieRoll       int
-	attacking     int
-	defending     int
-	losses        int
-	nationRemoved bool
+	DieRoll       int
+	Attacking     int
+	Defending     int
+	Losses        int
+	NationRemoved bool
 }
 
 func (aar *AttackActionResult) ActionType() string {
@@ -34,17 +34,17 @@ func (aar *AttackActionResult) String() string {
 	if str != "" {
 		return str
 	}
-	action := *aar.action
+	action := *aar.Action
 	if action == nil {
 		return noActionString
 	}
-	if aar.losses == 0 {
-		return fmt.Sprintf(attackActionStalemateFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.dieRoll)
+	if aar.Losses == 0 {
+		return fmt.Sprintf(attackActionStalemateFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.DieRoll)
 	}
-	if aar.losses > 0 {
-		return fmt.Sprintf(attackActionSuccessFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.dieRoll, aar.losses)
+	if aar.Losses > 0 {
+		return fmt.Sprintf(attackActionSuccessFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.DieRoll, aar.Losses)
 	}
-	return fmt.Sprintf(attackActionFailureFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.dieRoll, -aar.losses)
+	return fmt.Sprintf(attackActionFailureFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.DieRoll, -aar.Losses)
 }
 
 type AttackAction struct {
@@ -172,17 +172,17 @@ func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defending
 		nationRemoved, err = UpdateHoldingArmySize(db, nil, attackingTerritory.Abbreviation, attacking-attackerLosses, true, aa.Logger)
 	}
 	if err != nil {
+		aa.Logger.Err(err).Caller().Msg("Unable to update holding army size")
 		return nil, err
 	}
-	result := &AttackActionResult{
-		actionResultBase: actionResultBase[*AttackAction]{action: &aa, user: aa.User},
-		dieRoll:          x,
-		attacking:        attacking,
-		defending:        defending,
-		losses:           defenderLosses,
-		nationRemoved:    nationRemoved,
-	}
-	return result, nil
+	return &AttackActionResult{
+		actionResultBase: actionResultBase[*AttackAction]{Action: &aa, user: aa.User},
+		DieRoll:          x,
+		Attacking:        attacking,
+		Defending:        defending,
+		Losses:           defenderLosses,
+		NationRemoved:    nationRemoved,
+	}, nil
 }
 
 func (aa *AttackAction) doAttackWithCounter(db *sql.DB, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {

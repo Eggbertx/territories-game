@@ -22,8 +22,8 @@ var (
 
 type MoveActionResult struct {
 	actionResultBase[*MoveAction]
-	failedMove    bool
-	nationRemoved bool
+	FailedMove    bool
+	NationRemoved bool
 }
 
 func (mar *MoveActionResult) ActionType() string {
@@ -35,7 +35,7 @@ func (mar *MoveActionResult) String() string {
 	if str != "" {
 		return str
 	}
-	action := *mar.action
+	action := *mar.Action
 	if action == nil {
 		return noActionString
 	}
@@ -43,11 +43,11 @@ func (mar *MoveActionResult) String() string {
 		return fmt.Sprintf(moveAllArmiesResultFmt, action.User, action.Source, action.Destination)
 	}
 
-	if mar.nationRemoved {
+	if mar.NationRemoved {
 		return fmt.Sprintf(moveFailedNationRemoved, action.User, action.Destination, action.User)
 	}
 
-	if mar.failedMove {
+	if mar.FailedMove {
 		return fmt.Sprintf(moveFailed, action.User, action.Destination)
 	}
 
@@ -203,12 +203,12 @@ func (ma *MoveAction) DoAction(db *sql.DB) (ActionResult, error) {
 		ma.Logger.Err(err).Caller().Msg("Unable to commit transaction")
 		return nil, err
 	}
-	var result MoveActionResult
-	result.action = &ma
-	result.user = ma.User
-	result.failedMove = newDestinationArmies == 0
-	result.nationRemoved = nationRemoved
-
-	ma.Logger.Info().Msg(result.String())
-	return &result, nil
+	return &MoveActionResult{
+		actionResultBase: actionResultBase[*MoveAction]{
+			Action: &ma,
+			user:   ma.User,
+		},
+		FailedMove:    newDestinationArmies == 0,
+		NationRemoved: nationRemoved,
+	}, nil
 }

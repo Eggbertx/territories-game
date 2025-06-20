@@ -33,19 +33,19 @@ type ActionResult interface {
 }
 
 type actionResultBase[a Action] struct {
-	action *a
+	Action *a
 	user   string
 }
 
 func (arb *actionResultBase[a]) User() string {
-	if arb.action == nil {
+	if arb.Action == nil {
 		return ""
 	}
 	return arb.user
 }
 
 func (arb *actionResultBase[a]) String() string {
-	if arb.action == nil {
+	if arb.Action == nil {
 		return noActionString
 	}
 	if arb.user == "" {

@@ -28,7 +28,7 @@ func (car *ColorActionResult) String() string {
 	if str != "" {
 		return str
 	}
-	action := *car.action
+	action := *car.Action
 
 	return fmt.Sprintf(colorActionResultFmt, action.User, action.Color)
 }
@@ -71,11 +71,12 @@ func (ca *ColorAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	var result ColorActionResult
-	result.action = &ca
-	result.user = ca.User
-	ca.Logger.Info().Msg(result.String())
-	return &result, nil
+	return &ColorActionResult{
+		actionResultBase: actionResultBase[*ColorAction]{
+			Action: &ca,
+			user:   ca.User,
+		},
+	}, nil
 }
 
 func randomColor() string {

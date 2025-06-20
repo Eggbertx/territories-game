@@ -337,7 +337,7 @@ var (
 				}
 				aar := results[2].(*AttackActionResult)
 				assert.Equal(t, "Test User", aar.user)
-				action := *aar.action
+				action := *aar.Action
 				assert.Equal(t, "CA", action.AttackingTerritory)
 				assert.Equal(t, "NV", action.DefendingTerritory)
 			},

@@ -84,3 +84,8 @@ func GetLogger() (zerolog.Logger, error) {
 	loggerInitialized = true
 	return logger, nil
 }
+
+func SetLogger(l zerolog.Logger) {
+	logger = l
+	loggerInitialized = true
+}
