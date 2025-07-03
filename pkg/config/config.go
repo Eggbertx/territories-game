@@ -39,12 +39,10 @@ type Config struct {
 	// ActionsPerTurnHoldingsDivisor is used to determine how many actions a player can take per turn.
 	// A player can take ceil(holdings / ActionsPerTurnHoldingsDivisor) actions per turn.
 	ActionsPerTurnHoldingsDivisor float64 `json:"actionsPerTurnHoldingsDivisor"`
-	// TurnEndsWhenAllPlayersDone indicates whether a turn ends when all players have done all their actions
+	// TurnEndsWhenAllPlayersDone indicates whether a turn ends when all players have done all their actions. If TurnDurationString is
+	// unset, this must be true (otherwise, the turn will never end).
 	TurnEndsWhenAllPlayersDone bool `json:"turnEndsWhenAllPlayersDone"`
-	// TurnEndsWhenTimeExpires indicates whether a turn ends when the time expires. If TurnEndsWhenAllPlayersDone is false,
-	// this must be true, and vice versa
-	TurnEndsWhenTimeExpires bool `json:"turnEndsWhenTimeExpires"`
-	// TurnDurationString determines how long a turn lasts before it ends, if TurnEndsWhenTimeExpires is true.
+	// TurnDurationString determines how long a turn lasts before it ends, if it is a zero value, the turn only ends when all players are done.
 	TurnDurationString string `json:"turnDuration,omitempty"`
 
 	Territories []Territory `json:"territories"`
@@ -100,17 +98,14 @@ func (tc *Config) validateRequiredValues() error {
 	if tc.ActionsPerTurnHoldingsDivisor <= 0 {
 		tc.ActionsPerTurnHoldingsDivisor = 3
 	}
-	if !tc.TurnEndsWhenAllPlayersDone && !tc.TurnEndsWhenTimeExpires {
-		return fmt.Errorf("either turnEndsWhenAllPlayersDone or turnEndsWhenTimeExpires (or both) must be true")
-	}
-	if tc.TurnEndsWhenTimeExpires && tc.TurnDurationString == "" {
-		return fmt.Errorf("turnEndsWhenTimeExpires is true, but turnDuration is not set")
-	}
 	if tc.TurnDurationString != "" {
 		var err error
 		if tc.turnDuration, err = durationutil.ParseLongerDuration(tc.TurnDurationString); err != nil {
 			return fmt.Errorf("failed to parse turnDuration: %w", err)
 		}
+	}
+	if !tc.TurnEndsWhenAllPlayersDone && tc.turnDuration == 0 {
+		return fmt.Errorf("turnDuration must be set if turnEndsWhenAllPlayersDone is false")
 	}
 
 	return nil
@@ -185,7 +180,6 @@ func openAndValidateConfig() (*Config, error) {
 		MinimumNationsToStart:         3,
 		ActionsPerTurnHoldingsDivisor: 3,
 		TurnEndsWhenAllPlayersDone:    true,
-		TurnEndsWhenTimeExpires:       true,
 	}
 	fi, err := os.Open("config.json")
 	if err != nil {

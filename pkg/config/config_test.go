@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Eggbertx/durationutil"
 	"github.com/stretchr/testify/assert"
@@ -110,34 +111,18 @@ var (
 			},
 			expectError: true,
 			validateFunc: func(t *testing.T, _ *Config, err error) {
-				assert.Equal(t, "either turnEndsWhenAllPlayersDone or turnEndsWhenTimeExpires (or both) must be true", err.Error())
-			},
-		},
-		{
-			desc: "turnEndsWhenTimeExpires requires turnDuration",
-			cfg: &Config{
-				MapFile:                 "map.svg",
-				DBFile:                  "territories.db",
-				SVGOutFile:              "output.svg",
-				PNGOutFile:              "output.png",
-				Territories:             dummyTerritories,
-				TurnEndsWhenTimeExpires: true,
-			},
-			expectError: true,
-			validateFunc: func(t *testing.T, _ *Config, err error) {
-				assert.Equal(t, "turnEndsWhenTimeExpires is true, but turnDuration is not set", err.Error())
+				assert.Equal(t, "turnDuration must be set if turnEndsWhenAllPlayersDone is false", err.Error())
 			},
 		},
 		{
 			desc: "invalid turnDuration format",
 			cfg: &Config{
-				MapFile:                 "map.svg",
-				DBFile:                  "territories.db",
-				SVGOutFile:              "output.svg",
-				PNGOutFile:              "output.png",
-				Territories:             dummyTerritories,
-				TurnEndsWhenTimeExpires: true,
-				TurnDurationString:      "lol",
+				MapFile:            "map.svg",
+				DBFile:             "territories.db",
+				SVGOutFile:         "output.svg",
+				PNGOutFile:         "output.png",
+				Territories:        dummyTerritories,
+				TurnDurationString: "lol",
 			},
 			expectError: true,
 			validateFunc: func(t *testing.T, _ *Config, err error) {
@@ -153,7 +138,6 @@ var (
 				PNGOutFile:                 "output.png",
 				Territories:                dummyTerritories,
 				TurnEndsWhenAllPlayersDone: true,
-				TurnEndsWhenTimeExpires:    true,
 				TurnDurationString:         "1h",
 			},
 			validateFunc: func(t *testing.T, cfg *Config, err error) {
@@ -166,7 +150,7 @@ var (
 				assert.False(t, cfg.UnclaimedTerritoriesHave1Army)
 				assert.Equal(t, 3.0, cfg.ActionsPerTurnHoldingsDivisor)
 				assert.True(t, cfg.TurnEndsWhenAllPlayersDone)
-				assert.True(t, cfg.TurnEndsWhenTimeExpires)
+				assert.Equal(t, time.Hour, cfg.turnDuration)
 			},
 		},
 	}

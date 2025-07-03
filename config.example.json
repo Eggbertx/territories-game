@@ -6,10 +6,13 @@
 	"svgOutFile": "out/map-modified.svg",
 	"pngOutFile": "out/map.png",
 	"doCounterattack": false,
-	"maxArmiesPerTerritory": 5,
 	"initialArmies": 3,
 	"minimumNationsToStart": 3,
+	"maxArmiesPerTerritory": 5,
 	"unclaimedTerritoriesHave1Army": true,
+	"actionsPerTurnHoldingsDivisor": 3,
+	"turnEndsWhenAllPlayersDone": true,
+	"turnDuration": "1d",
 	"territories": [
 		{
 			"abbr": "AL",
