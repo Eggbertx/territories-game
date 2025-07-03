@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Eggbertx/durationutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,11 +33,155 @@ var (
 	aliasTestCases = []aliasTestCase{
 		{"District of Columbia", "DC"},
 	}
+
+	dummyTerritories = []Territory{
+		{Abbreviation: "CA", Name: "California", Neighbors: []string{"NV"}},
+		{Abbreviation: "NV", Name: "Nevada", Neighbors: []string{"CA"}},
+	}
+
+	validateRequiredValuesTestCases = []configRequiredValuesTestCase{
+		{
+			desc: "Missing mapFile",
+			cfg: &Config{
+				Territories: dummyTerritories,
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.Equal(t, "mapFile", err.(*missingFieldError).field)
+			},
+		},
+		{
+			desc: "Missing dbFile",
+			cfg: &Config{
+				MapFile:     "map.svg",
+				Territories: dummyTerritories,
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.Equal(t, "dbFile", err.(*missingFieldError).field)
+			},
+		},
+		{
+			desc: "Missing svgOutFile",
+			cfg: &Config{
+				MapFile:     "map.svg",
+				DBFile:      "db.sqlite",
+				Territories: dummyTerritories,
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.Equal(t, "svgOutFile", err.(*missingFieldError).field)
+			},
+		},
+		{
+			desc: "Missing pngOutFile",
+			cfg: &Config{
+				MapFile:     "map.svg",
+				DBFile:      "territories.db",
+				SVGOutFile:  "output.svg",
+				Territories: dummyTerritories,
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.Equal(t, "pngOutFile", err.(*missingFieldError).field)
+			},
+		},
+		{
+			desc: "fail if no territories",
+			cfg: &Config{
+				MapFile:    "map.svg",
+				DBFile:     "territories.db",
+				SVGOutFile: "output.svg",
+				PNGOutFile: "output.png",
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.Equal(t, "at least one territory is required", err.Error())
+			},
+		},
+		{
+			desc: "turnEndsWhenAllPlayersDone or turnEndsWhenTimeExpires required",
+			cfg: &Config{
+				MapFile:     "map.svg",
+				DBFile:      "territories.db",
+				SVGOutFile:  "output.svg",
+				PNGOutFile:  "output.png",
+				Territories: dummyTerritories,
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.Equal(t, "either turnEndsWhenAllPlayersDone or turnEndsWhenTimeExpires (or both) must be true", err.Error())
+			},
+		},
+		{
+			desc: "turnEndsWhenTimeExpires requires turnDuration",
+			cfg: &Config{
+				MapFile:                 "map.svg",
+				DBFile:                  "territories.db",
+				SVGOutFile:              "output.svg",
+				PNGOutFile:              "output.png",
+				Territories:             dummyTerritories,
+				TurnEndsWhenTimeExpires: true,
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.Equal(t, "turnEndsWhenTimeExpires is true, but turnDuration is not set", err.Error())
+			},
+		},
+		{
+			desc: "invalid turnDuration format",
+			cfg: &Config{
+				MapFile:                 "map.svg",
+				DBFile:                  "territories.db",
+				SVGOutFile:              "output.svg",
+				PNGOutFile:              "output.png",
+				Territories:             dummyTerritories,
+				TurnEndsWhenTimeExpires: true,
+				TurnDurationString:      "lol",
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, _ *Config, err error) {
+				assert.ErrorIs(t, err, durationutil.ErrInvalidDurationString)
+			},
+		},
+		{
+			desc: "valid configuration, optional fields set",
+			cfg: &Config{
+				MapFile:                    "map.svg",
+				DBFile:                     "territories.db",
+				SVGOutFile:                 "output.svg",
+				PNGOutFile:                 "output.png",
+				Territories:                dummyTerritories,
+				TurnEndsWhenAllPlayersDone: true,
+				TurnEndsWhenTimeExpires:    true,
+				TurnDurationString:         "1h",
+			},
+			validateFunc: func(t *testing.T, cfg *Config, err error) {
+				assert.NoError(t, err)
+
+				assert.False(t, cfg.DoCounterattack)
+				assert.Equal(t, 3, cfg.InitialArmies)
+				assert.Equal(t, 3, cfg.MinimumNationsToStart)
+				assert.Equal(t, 5, cfg.MaxArmiesPerTerritory)
+				assert.False(t, cfg.UnclaimedTerritoriesHave1Army)
+				assert.Equal(t, 3.0, cfg.ActionsPerTurnHoldingsDivisor)
+				assert.True(t, cfg.TurnEndsWhenAllPlayersDone)
+				assert.True(t, cfg.TurnEndsWhenTimeExpires)
+			},
+		},
+	}
 )
 
 type aliasTestCase struct {
 	alias  string
 	expect string
+}
+
+type configRequiredValuesTestCase struct {
+	desc         string
+	cfg          *Config
+	expectError  bool
+	validateFunc func(t *testing.T, cfg *Config, err error)
 }
 
 func getTestConfig() *Config {
@@ -186,4 +331,20 @@ func TestMutualNeighborValidation(t *testing.T) {
 	assert.Error(t, err)
 	err = nonMutualNeighborsCfg.validateNeighborMutuality()
 	assert.Error(t, err)
+}
+
+func TestValidateRequiredValues(t *testing.T) {
+	for _, tc := range validateRequiredValuesTestCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := tc.cfg.validateRequiredValues()
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			if tc.validateFunc != nil {
+				tc.validateFunc(t, tc.cfg, err)
+			}
+		})
+	}
 }

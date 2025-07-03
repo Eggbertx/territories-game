@@ -8,6 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Eggbertx/durationutil"
 )
 
 var (
@@ -15,18 +18,38 @@ var (
 )
 
 type Config struct {
-	MapFile                       string      `json:"mapFile"`
-	DBFile                        string      `json:"dbFile"`
-	LogFile                       string      `json:"logFile"`
-	PrintLogToConsole             bool        `json:"printLogToConsole"`
-	SVGOutFile                    string      `json:"svgOutFile"`
-	PNGOutFile                    string      `json:"pngOutFile"`
-	DoCounterattack               bool        `json:"doCounterattack"`
-	InitialArmies                 int         `json:"initialArmies"`
-	MinimumNationsToStart         int         `json:"minimumNationsToStart"`
-	MaxArmiesPerTerritory         int         `json:"maxArmiesPerTerritory"`
-	UnclaimedTerritoriesHave1Army bool        `json:"unclaimedTerritoriesHave1Army"`
-	Territories                   []Territory `json:"territories"`
+	MapFile           string `json:"mapFile"`
+	DBFile            string `json:"dbFile"`
+	LogFile           string `json:"logFile"`
+	PrintLogToConsole bool   `json:"printLogToConsole"`
+	SVGOutFile        string `json:"svgOutFile"`
+	PNGOutFile        string `json:"pngOutFile"`
+
+	// DoCounterattack will eventually be used to determine if a defending territory automatically counterattacks
+	DoCounterattack bool `json:"doCounterattack"`
+	// InitialArmies is the number of armies each player starts with in their initial territory.
+	InitialArmies int `json:"initialArmies"`
+	// MinimumNationsToStart is the minimum number of nations required before players can start taking turns, aside from color
+	MinimumNationsToStart int `json:"minimumNationsToStart"`
+	// MaxArmiesPerTerritory is the maximum number of armies that can be moved into or raised in a territory.
+	MaxArmiesPerTerritory int `json:"maxArmiesPerTerritory"`
+	// UnclaimedTerritoriesHave1Army indicates whether unclaimed territories are treated as having 1 army to destroy
+	// before a player can claim them.
+	UnclaimedTerritoriesHave1Army bool `json:"unclaimedTerritoriesHave1Army"`
+	// ActionsPerTurnHoldingsDivisor is used to determine how many actions a player can take per turn.
+	// A player can take ceil(holdings / ActionsPerTurnHoldingsDivisor) actions per turn.
+	ActionsPerTurnHoldingsDivisor float64 `json:"actionsPerTurnHoldingsDivisor"`
+	// TurnEndsWhenAllPlayersDone indicates whether a turn ends when all players have done all their actions
+	TurnEndsWhenAllPlayersDone bool `json:"turnEndsWhenAllPlayersDone"`
+	// TurnEndsWhenTimeExpires indicates whether a turn ends when the time expires. If TurnEndsWhenAllPlayersDone is false,
+	// this must be true, and vice versa
+	TurnEndsWhenTimeExpires bool `json:"turnEndsWhenTimeExpires"`
+	// TurnDurationString determines how long a turn lasts before it ends, if TurnEndsWhenTimeExpires is true.
+	TurnDurationString string `json:"turnDuration,omitempty"`
+
+	Territories []Territory `json:"territories"`
+
+	turnDuration time.Duration
 }
 
 func (tc *Config) ResolveTerritory(query string) (*Territory, error) {
@@ -51,29 +74,45 @@ func (tc *Config) ResolveTerritory(query string) (*Territory, error) {
 
 func (tc *Config) validateRequiredValues() error {
 	if tc.MapFile == "" {
-		return fmt.Errorf("mapFile is required")
+		return &missingFieldError{"mapFile"}
 	}
 	if tc.DBFile == "" {
-		return fmt.Errorf("dbFile is required")
+		return &missingFieldError{"dbFile"}
 	}
 	if tc.SVGOutFile == "" {
-		return fmt.Errorf("svgOutFile is required")
+		return &missingFieldError{"svgOutFile"}
 	}
 	if tc.PNGOutFile == "" {
-		return fmt.Errorf("pngOutFile is required")
+		return &missingFieldError{"pngOutFile"}
 	}
 	if tc.MaxArmiesPerTerritory <= 0 {
 		tc.MaxArmiesPerTerritory = 5
 	}
 	if tc.InitialArmies <= 0 {
-		tc.InitialArmies = 1
+		tc.InitialArmies = 3
 	}
 	if tc.MinimumNationsToStart <= 0 {
-		return fmt.Errorf("minimumNationsToStart must be greater than 0")
+		tc.MinimumNationsToStart = 3
 	}
 	if len(tc.Territories) == 0 {
 		return fmt.Errorf("at least one territory is required")
 	}
+	if tc.ActionsPerTurnHoldingsDivisor <= 0 {
+		tc.ActionsPerTurnHoldingsDivisor = 3
+	}
+	if !tc.TurnEndsWhenAllPlayersDone && !tc.TurnEndsWhenTimeExpires {
+		return fmt.Errorf("either turnEndsWhenAllPlayersDone or turnEndsWhenTimeExpires (or both) must be true")
+	}
+	if tc.TurnEndsWhenTimeExpires && tc.TurnDurationString == "" {
+		return fmt.Errorf("turnEndsWhenTimeExpires is true, but turnDuration is not set")
+	}
+	if tc.TurnDurationString != "" {
+		var err error
+		if tc.turnDuration, err = durationutil.ParseLongerDuration(tc.TurnDurationString); err != nil {
+			return fmt.Errorf("failed to parse turnDuration: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -130,11 +169,23 @@ func (tc *Config) validateNeighborMutuality() error {
 	return nil
 }
 
+type missingFieldError struct {
+	field string
+}
+
+func (e *missingFieldError) Error() string {
+	return fmt.Sprintf("%s is required", e.field)
+}
+
 func openAndValidateConfig() (*Config, error) {
 	c := Config{
-		PrintLogToConsole:     true,
-		MaxArmiesPerTerritory: 5,
-		InitialArmies:         1,
+		PrintLogToConsole:             true,
+		MaxArmiesPerTerritory:         5,
+		InitialArmies:                 3,
+		MinimumNationsToStart:         3,
+		ActionsPerTurnHoldingsDivisor: 3,
+		TurnEndsWhenAllPlayersDone:    true,
+		TurnEndsWhenTimeExpires:       true,
 	}
 	fi, err := os.Open("config.json")
 	if err != nil {

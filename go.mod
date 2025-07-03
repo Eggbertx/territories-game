@@ -13,6 +13,7 @@ require (
 )
 
 require (
+	github.com/Eggbertx/durationutil v1.0.0
 	github.com/antchfx/xpath v1.3.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect

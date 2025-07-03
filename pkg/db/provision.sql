@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS nations (
 
 CREATE TABLE IF NOT EXISTS holdings (
 	id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-	territory CHAR(2) NOT NULL UNIQUE,
+	territory VARCHAR(10) NOT NULL UNIQUE,
 	nation_id INTEGER NOT NULL,
 	army_size INTEGER NOT NULL CHECK(army_size > 0),
 
@@ -23,27 +23,28 @@ CREATE TABLE IF NOT EXISTS holdings (
 		ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS battles (
+CREATE TABLE IF NOT EXISTS actions (
 	id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-	attacker_id INTEGER NOT NULL,
-	defender_id INTEGER NOT NULL,
-	attacker_size_start INTEGER NOT NULL CHECK(attacker_size_start > 0),
-	defender_size_start INTEGER NOT NULL CHECK(defender_size_start > 0),
-	attacker_size_end INTEGER NOT NULL,
-	defender_size_end INTEGER NOT NULL,
-	attacker_wins BOOLEAN NOT NULL,
+	nation_id INTEGER,
+	action_type VARCHAR(45) NOT NULL,
+	is_new_turn BOOLEAN NOT NULL DEFAULT 0,
+	timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-	CONSTRAINT battles_attacker_id_fk
-		FOREIGN KEY(attacker_id)
+	CONSTRAINT actions_nation_id_fk
+		FOREIGN KEY(nation_id)
 		REFERENCES nations(id)
-		ON DELETE CASCADE,
-
-	CONSTRAINT battles_defender_id_fk
-		FOREIGN KEY(defender_id)
-		REFERENCES nations(id)
-		ON DELETE CASCADE
+		ON DELETE SET NULL
 );
 
 CREATE VIEW IF NOT EXISTS v_nation_holdings
 	AS SELECT holdings.id as id, nations.id as nation_id, country_name, color, territory, army_size, player
 	FROM holdings left join nations on nation_id = nations.id;
+
+CREATE VIEW IF NOT EXISTS v_nation_player_actions
+	AS SELECT actions.id as id, nations.id as nation_id, country_name, color, action_type, timestamp, player
+	FROM actions left join nations on nation_id = nations.id
+	WHERE is_new_turn = 0;
+
+CREATE VIEW IF NOT EXISTS v_new_turn_actions
+	AS SELECT actions.id as id, timestamp
+	FROM actions WHERE is_new_turn = 1;
