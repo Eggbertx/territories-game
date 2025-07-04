@@ -784,11 +784,11 @@ type actionsTestCase struct {
 }
 
 func runActionTestCase(t *testing.T, tc *actionsTestCase) {
-	_, err := config.GetTestingConfig()
+	cfg, err := config.GetTestingConfig(t)
 	if !assert.NoError(t, err, "failed to get testing config") {
 		t.FailNow()
 	}
-
+	assert.NoFileExists(t, cfg.DBFile, "expected no database file to exist before test")
 	tc.db, err = db.GetDB()
 	if !assert.NoError(t, err, "failed to get test database") {
 		t.FailNow()

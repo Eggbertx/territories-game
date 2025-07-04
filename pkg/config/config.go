@@ -70,6 +70,10 @@ func (tc *Config) ResolveTerritory(query string) (*Territory, error) {
 	return nil, fmt.Errorf("unrecognized abbreviation, name, or alias %q", query)
 }
 
+func (tc *Config) TurnDuration() time.Duration {
+	return tc.turnDuration
+}
+
 func (tc *Config) validateRequiredValues() error {
 	if tc.MapFile == "" {
 		return &missingFieldError{"mapFile"}
@@ -217,15 +221,12 @@ func GetConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func GetTestingConfig() (*Config, error) {
+func GetTestingConfig(t *testing.T) (*Config, error) {
 	if !testing.Testing() {
 		panic("GetTestingConfig should only be called in testing mode")
 	}
 	if cfg == nil {
-		dir, err := os.MkdirTemp("", "territories-test-config")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create temporary directory for testing config: %w", err)
-		}
+		dir := t.TempDir()
 		cfg = &Config{
 			MapFile:               path.Join(dir, "test.svg"),
 			DBFile:                path.Join(dir, "test.db"),

@@ -68,6 +68,9 @@ func CloseDB() error {
 		return nil
 	}
 	err := db.Close()
+	if err != nil {
+		return err
+	}
 	db = nil
-	return err
+	return nil
 }
