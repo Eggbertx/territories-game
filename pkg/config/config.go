@@ -45,6 +45,10 @@ type Config struct {
 	// TurnDurationString determines how long a turn lasts before it ends, if it is a zero value, the turn only ends when all players are done.
 	TurnDurationString string `json:"turnDuration,omitempty"`
 
+	// DoTurnManagement indicates whether turn management should be handled internally. If it is false, it is assumed that the consuming
+	// application will handle turn management, such as by using a timer or a game loop. Default is true.
+	DoTurnManagement bool `json:"doTurnManagement"`
+
 	Territories []Territory `json:"territories"`
 
 	turnDuration time.Duration
@@ -110,6 +114,10 @@ func (tc *Config) validateRequiredValues() error {
 	}
 	if !tc.TurnEndsWhenAllPlayersDone && tc.turnDuration == 0 {
 		return fmt.Errorf("turnDuration must be set if turnEndsWhenAllPlayersDone is false")
+	}
+
+	if tc.DoTurnManagement {
+		return errNoSQLiteMathFunctionsError // if this build has sqlite_math_functions tag, this should be nil
 	}
 
 	return nil
@@ -184,6 +192,7 @@ func openAndValidateConfig() (*Config, error) {
 		MinimumNationsToStart:         3,
 		ActionsPerTurnHoldingsDivisor: 3,
 		TurnEndsWhenAllPlayersDone:    true,
+		DoTurnManagement:              true,
 	}
 	fi, err := os.Open("config.json")
 	if err != nil {
@@ -228,16 +237,19 @@ func GetTestingConfig(t *testing.T) (*Config, error) {
 	if cfg == nil {
 		dir := t.TempDir()
 		cfg = &Config{
-			MapFile:               path.Join(dir, "test.svg"),
-			DBFile:                path.Join(dir, "test.db"),
-			LogFile:               path.Join(dir, "test.log"),
-			PrintLogToConsole:     true,
-			SVGOutFile:            path.Join(dir, "test.svg"),
-			PNGOutFile:            path.Join(dir, "test.png"),
-			DoCounterattack:       false,
-			MaxArmiesPerTerritory: 5,
-			InitialArmies:         3,
-			MinimumNationsToStart: 2,
+			MapFile:                       path.Join(dir, "test.svg"),
+			DBFile:                        path.Join(dir, "test.db"),
+			LogFile:                       path.Join(dir, "test.log"),
+			PrintLogToConsole:             true,
+			SVGOutFile:                    path.Join(dir, "test.svg"),
+			PNGOutFile:                    path.Join(dir, "test.png"),
+			DoCounterattack:               false,
+			MaxArmiesPerTerritory:         5,
+			InitialArmies:                 3,
+			MinimumNationsToStart:         2,
+			ActionsPerTurnHoldingsDivisor: 3,
+			DoTurnManagement:              true,
+			TurnEndsWhenAllPlayersDone:    true,
 			Territories: []Territory{
 				{Name: "California", Abbreviation: "CA", Neighbors: []string{"NV", "OR", "AZ"}},
 				{Name: "Nevada", Abbreviation: "NV", Neighbors: []string{"CA", "OR", "UT"}},
@@ -251,13 +263,7 @@ func GetTestingConfig(t *testing.T) (*Config, error) {
 }
 
 func CloseTestingConfig(t *testing.T) {
-	if cfg != nil {
-		dir := path.Dir(cfg.MapFile)
-		if err := os.RemoveAll(dir); err != nil {
-			t.Fatalf("failed to remove temporary directory %q: %v\n", dir, err)
-		}
-		cfg = nil
-	}
+	cfg = nil
 }
 
 func SetConfig(c *Config) {

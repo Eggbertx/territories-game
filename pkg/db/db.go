@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"net"
+	"strings"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	_ "github.com/mattn/go-sqlite3"
@@ -61,6 +62,15 @@ func GetDB() (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+// ErrorIsMissingSQLFunction returns true if the error indicates that a required SQLite function is missing, possibly because it
+// was not built with the sqlite_math_functions build tag.
+func ErrorIsMissingSQLFunction(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.HasPrefix(err.Error(), "no such function: ")
 }
 
 func CloseDB() error {
