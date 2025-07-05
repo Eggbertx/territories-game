@@ -3,6 +3,10 @@
 
 package config
 
+const (
+	HasSQLiteMathFunctions = true
+)
+
 var (
 	errNoSQLiteMathFunctionsError error = nil
 )
