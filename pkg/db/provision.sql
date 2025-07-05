@@ -40,10 +40,9 @@ CREATE VIEW IF NOT EXISTS v_nation_holdings
 	AS SELECT holdings.id as id, nations.id as nation_id, country_name, color, territory, army_size, player
 	FROM holdings left join nations on nation_id = nations.id;
 
-CREATE VIEW IF NOT EXISTS v_nation_player_actions
-	AS SELECT actions.id as id, nations.id as nation_id, country_name, color, action_type, timestamp, player
-	FROM actions left join nations on nation_id = nations.id
-	WHERE is_new_turn = 0;
+CREATE VIEW IF NOT EXISTS v_actions
+	AS SELECT actions.id as id, nations.id as nation_id, country_name, player, action_type, is_new_turn, timestamp
+	FROM actions left join nations on nation_id = nations.id;
 
 CREATE VIEW IF NOT EXISTS v_new_turn_actions
 	AS SELECT actions.id as id, timestamp
