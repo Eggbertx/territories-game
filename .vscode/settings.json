@@ -1,0 +1,3 @@
+{
+	"go.buildTags": "sqlite_math_functions"
+}
