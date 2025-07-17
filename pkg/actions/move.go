@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
+	"github.com/Eggbertx/territories-game/pkg/db"
+	"github.com/Eggbertx/territories-game/pkg/turns"
 	"github.com/rs/zerolog"
 )
 
@@ -63,7 +65,7 @@ type MoveAction struct {
 	Logger zerolog.Logger
 }
 
-func (ma *MoveAction) DoAction(db *sql.DB) (ActionResult, error) {
+func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	if ma.Destination == "" || ma.Source == ma.Destination {
 		ma.Logger.Err(ErrNoTargetTerritory).Caller().Send()
 		return nil, ErrNoTargetTerritory
@@ -98,10 +100,30 @@ func (ma *MoveAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
+	tx, err := tdb.Begin()
+	if err != nil {
+		ma.Logger.Err(err).Caller().Send()
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	if cfg.DoTurnManagement {
+		actionsRemaining, err := turns.PlayerActionsRemaining(ma.User, tx)
+		if err != nil {
+			ma.Logger.Err(err).Caller().Msg("Unable to get player actions remaining")
+			return nil, err
+		}
+		if actionsRemaining <= 0 {
+			err = fmt.Errorf("no actions remaining for player %s", ma.User)
+			ma.Logger.Err(err).Caller().Send()
+			return nil, err
+		}
+	}
+
 	var armiesInSourceTerritory, armiesInDestTerritory int
 	var fromPlayer, destinationPlayer string
 	const moveSQL = "SELECT army_size, player FROM v_nation_holdings WHERE territory = ?"
-	stmt, err := db.Prepare(moveSQL)
+	stmt, err := tx.Prepare(moveSQL)
 	if err != nil {
 		ma.Logger.Err(err).Caller().Msg("Unable to prepare move query")
 		return nil, err
@@ -149,13 +171,6 @@ func (ma *MoveAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		ma.Logger.Err(err).Caller().Msg("Unable to begin transaction")
-		return nil, err
-	}
-	defer tx.Rollback()
-
 	var newDestinationArmies int
 	if armiesInDestTerritory == 0 && cfg.UnclaimedTerritoriesHave1Army {
 		_, losses, err := attackCalculation(ma.Armies, 1)
@@ -189,14 +204,14 @@ func (ma *MoveAction) DoAction(db *sql.DB) (ActionResult, error) {
 		}
 	} else if newDestinationArmies > 0 {
 		// player is joining armies into an existing holding, update the army size
-		if _, err = UpdateHoldingArmySize(db, tx, destTerritory.Abbreviation, newDestinationArmies, false, ma.Logger); err != nil {
+		if _, err = db.UpdateHoldingArmySize(tdb, tx, destTerritory.Abbreviation, newDestinationArmies, false, ma.Logger); err != nil {
 			return nil, err
 		}
 	}
 
 	// remove armies from source territory, if they lost armies in the attack and have no armies left, delete the holding
 	var nationRemoved bool
-	if nationRemoved, err = UpdateHoldingArmySize(db, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-ma.Armies, true, ma.Logger); err != nil {
+	if nationRemoved, err = db.UpdateHoldingArmySize(tdb, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-ma.Armies, true, ma.Logger); err != nil {
 		return nil, err
 	}
 

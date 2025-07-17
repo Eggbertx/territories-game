@@ -54,9 +54,9 @@ func CurrentTurnStarted() (time.Time, bool, error) {
 	return turnTimestamp, firstTurn, nil
 }
 
-// PlayerActionsPerTurn calculates the number of actions a player can take per turn based on their holdings and the configured divisor.
+// MaxPlayerActionsPerTurn calculates the number of actions a player can take per turn based on their holdings and the configured divisor.
 // If the player does not have any holdings, it returns 0.
-func PlayerActionsPerTurn(player string, tx *sql.Tx) (int, error) {
+func MaxPlayerActionsPerTurn(player string, tx *sql.Tx) (int, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return 0, err
@@ -101,12 +101,12 @@ func PlayerActionsPerTurn(player string, tx *sql.Tx) (int, error) {
 
 // PlayerActionsRemaining returns the number of actions a player can still take in the current turn.
 func PlayerActionsRemaining(player string, tx *sql.Tx) (int, error) {
-	db, err := db.GetDB()
-	if err != nil {
-		return 0, err
-	}
 	shouldCommit := tx == nil
 	if shouldCommit {
+		db, err := db.GetDB()
+		if err != nil {
+			return 0, err
+		}
 		tx, err = db.Begin()
 		if err != nil {
 			return 0, err
@@ -114,7 +114,7 @@ func PlayerActionsRemaining(player string, tx *sql.Tx) (int, error) {
 		defer tx.Rollback()
 	}
 
-	totalTurns, err := PlayerActionsPerTurn(player, tx)
+	totalTurns, err := MaxPlayerActionsPerTurn(player, tx)
 	if err != nil {
 		return 0, err
 	}
@@ -138,12 +138,62 @@ func PlayerActionsRemaining(player string, tx *sql.Tx) (int, error) {
 // EndTurn ends the current turn, inserting a new action with is_new_turn set to true, and calling all registered turn end handlers.
 // This is mainly used by the game when all players have used their available actions or the time limit has been reached
 func EndTurn(reason TurnEndReason, tx *sql.Tx) error {
-	db, err := db.GetDB()
+	now := time.Now()
+	err := AddTurnEndActionEntry(now, tx)
 	if err != nil {
 		return err
 	}
+
+	for _, handler := range turnEndHandlers {
+		if err = handler(now, reason); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// AddPlayerActionEntry adds a new row in the actions table representing a turn action taken by a player.
+// It is assumed that this will be run at the end of an action handler function, after all necessary checks
+// have been made
+func AddPlayerActionEntry(actionType string, player string, timestamp time.Time, tx *sql.Tx) error {
 	shouldCommit := tx == nil
 	if shouldCommit {
+		db, err := db.GetDB()
+		if err != nil {
+			return err
+		}
+		tx, err = db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+	}
+	stmt, err := tx.Prepare(`INSERT INTO actions (action_type, nation_id, timestamp)
+		VALUES (?, (SELECT id FROM nations WHERE player = ?), ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	if _, err := stmt.Exec(actionType, player, timestamp); err != nil {
+		return err
+	}
+
+	if shouldCommit {
+		return tx.Commit()
+	}
+	return nil
+}
+
+// AddTurnEndActionEntry adds a new row in the actions table representing the end of a turn.
+func AddTurnEndActionEntry(timestamp time.Time, tx *sql.Tx) error {
+	shouldCommit := tx == nil
+	if shouldCommit {
+		db, err := db.GetDB()
+		if err != nil {
+			return err
+		}
 		tx, err = db.Begin()
 		if err != nil {
 			return err
@@ -157,15 +207,8 @@ func EndTurn(reason TurnEndReason, tx *sql.Tx) error {
 	}
 	defer stmt.Close()
 
-	now := time.Now()
-	if _, err = stmt.Exec(now); err != nil {
+	if _, err = stmt.Exec(timestamp); err != nil {
 		return err
-	}
-
-	for _, handler := range turnEndHandlers {
-		if err = handler(now, reason); err != nil {
-			return err
-		}
 	}
 
 	if shouldCommit {

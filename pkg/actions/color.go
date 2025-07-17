@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Eggbertx/territories-game/pkg/db"
 	"github.com/mattn/go-sqlite3"
 	"github.com/mazznoer/csscolorparser"
 	"github.com/rs/zerolog"
@@ -39,8 +40,8 @@ type ColorAction struct {
 	Logger zerolog.Logger
 }
 
-func (ca *ColorAction) DoAction(db *sql.DB) (ActionResult, error) {
-	err := ValidateUser(ca.User, db, ca.Logger)
+func (ca *ColorAction) DoAction(tdb *sql.DB) (ActionResult, error) {
+	err := db.ValidateUser(ca.User, tdb, ca.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func (ca *ColorAction) DoAction(db *sql.DB) (ActionResult, error) {
 	parsedColor.A = 1.0 // Ensure the color is fully opaque
 	ca.Color = strings.TrimPrefix(parsedColor.Clamp().HexString(), "#")
 
-	stmt, err := db.Prepare("UPDATE nations SET color = ? WHERE player = ?")
+	stmt, err := tdb.Prepare("UPDATE nations SET color = ? WHERE player = ?")
 	if err != nil {
 		ca.Logger.Err(err).Caller().Msg("Unable to prepare color update statement")
 		return nil, err
@@ -61,7 +62,7 @@ func (ca *ColorAction) DoAction(db *sql.DB) (ActionResult, error) {
 	defer stmt.Close()
 	if _, err = stmt.Exec(ca.Color, ca.User); err != nil {
 		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
-			err = ErrColorInUse
+			err = db.ErrColorInUse
 		}
 		ca.Logger.Err(err).Caller().Msg("Unable to update nation color")
 		return nil, err

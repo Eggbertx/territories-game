@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
+	"github.com/Eggbertx/territories-game/pkg/db"
+	"github.com/Eggbertx/territories-game/pkg/turns"
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 )
@@ -42,7 +45,7 @@ type JoinAction struct {
 	Logger zerolog.Logger
 }
 
-func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
+func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		log, _ := config.GetLogger()
@@ -69,7 +72,7 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	tx, err := db.Begin()
+	tx, err := tdb.Begin()
 	if err != nil {
 		errEv.Err(err).Caller().Msg("Unable to begin transaction")
 		return nil, err
@@ -89,8 +92,8 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 	if numPlayerMatches > 0 {
-		errEv.Err(ErrPlayerAlreadyJoined).Caller().Send()
-		return nil, ErrPlayerAlreadyJoined
+		errEv.Err(db.ErrPlayerAlreadyJoined).Caller().Send()
+		return nil, db.ErrPlayerAlreadyJoined
 	}
 
 	if err = tx.QueryRow(nationAlreadyJoinedSQL, ja.Nation).Scan(&numNationMatches); err != nil {
@@ -98,8 +101,8 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 	if numNationMatches > 0 {
-		errEv.Err(ErrNationAlreadyJoined).Caller().Send()
-		return nil, ErrNationAlreadyJoined
+		errEv.Err(db.ErrNationAlreadyJoined).Caller().Send()
+		return nil, db.ErrNationAlreadyJoined
 	}
 
 	if _, err = tx.Exec(nationAddSQL, ja.Nation, ja.User, randomColor()); err != nil {
@@ -113,6 +116,12 @@ func (ja *JoinAction) DoAction(db *sql.DB) (ActionResult, error) {
 		errEv.Err(err).Caller().Msg("Unable to add initial holding")
 		return nil, err
 	}
+
+	if err = turns.AddPlayerActionEntry("join", ja.User, time.Now(), tx); err != nil {
+		errEv.Err(err).Caller().Msg("Unable to add player action entry")
+		return nil, err
+	}
+
 	if err = tx.Commit(); err != nil {
 		errEv.Err(err).Caller().Msg("Unable to commit transaction")
 		return nil, err

@@ -30,17 +30,20 @@ func setupTurnCheckDB(t *testing.T) *sql.DB {
 	}
 
 	_, err = tdb.Exec(`INSERT INTO holdings (territory, nation_id, army_size) VALUES
-	('ca', 1, 3),
-	('nv', 2, 3),
-	('ut', 3, 3)`)
+	('CA', 1, 3),
+	('NV', 2, 3),
+	('UT', 3, 3)`)
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	_, err = tdb.Exec(`INSERT INTO actions(nation_id, action_type, is_new_turn, timestamp) VALUES
-	(1, 'join', 0, '2025-01-01 01:00:00'),
-	(2, 'join', 0, '2025-01-01 02:00:00'),
-	(3, 'join', 0, '2025-01-01 03:00:00')`)
-	if !assert.NoError(t, err) {
+
+	if !assert.NoError(t, AddPlayerActionEntry("join", "player0", time.Date(2025, 1, 1, 1, 0, 0, 0, time.UTC), nil)) {
+		t.FailNow()
+	}
+	if !assert.NoError(t, AddPlayerActionEntry("join", "player1", time.Date(2025, 1, 1, 2, 0, 0, 0, time.UTC), nil)) {
+		t.FailNow()
+	}
+	if !assert.NoError(t, AddPlayerActionEntry("join", "player2", time.Date(2025, 1, 1, 3, 0, 0, 0, time.UTC), nil)) {
 		t.FailNow()
 	}
 
@@ -74,9 +77,9 @@ func doTestAreAllPlayersFinished(t *testing.T, withTx bool) {
 	assert.Nil(t, playersWithActions, "Players should not have actions available immediately after joining")
 
 	query := `INSERT INTO holdings(territory, nation_id, army_size) VALUES
-		('wa', 3, 3),
-		('or', 3, 3),
-		('id', 3, 3)`
+		('WA', 3, 3),
+		('OR', 3, 3),
+		('ID', 3, 3)`
 	if withTx {
 		_, err = tx.Exec(query)
 	} else {
@@ -86,16 +89,16 @@ func doTestAreAllPlayersFinished(t *testing.T, withTx bool) {
 		t.FailNow()
 	}
 
-	query = `INSERT INTO actions(nation_id, action_type, is_new_turn, timestamp) VALUES
-	(NULL, 'turn', 1, '2025-01-01 04:00:00'),
-	(1, 'move', 0, '2025-01-01 05:00:00'),
-	(3, 'move', 0, '2025-01-01 06:00:00')`
-	if withTx {
-		_, err = tx.Exec(query)
-	} else {
-		_, err = tdb.Exec(query)
+	if !assert.NoError(t, AddTurnEndActionEntry(time.Date(2025, 1, 1, 4, 0, 0, 0, time.UTC), tx)) {
+		t.FailNow()
 	}
-	if !assert.NoError(t, err) {
+	if !assert.NoError(t, AddPlayerActionEntry("move", "player0", time.Date(2025, 1, 1, 5, 0, 0, 0, time.UTC), tx)) {
+		t.FailNow()
+	}
+	if !assert.NoError(t, AddPlayerActionEntry("move", "player1", time.Date(2025, 1, 1, 6, 0, 0, 0, time.UTC), tx)) {
+		t.FailNow()
+	}
+	if !assert.NoError(t, AddPlayerActionEntry("move", "player2", time.Date(2025, 1, 1, 7, 0, 0, 0, time.UTC), tx)) {
 		t.FailNow()
 	}
 
@@ -105,22 +108,25 @@ func doTestAreAllPlayersFinished(t *testing.T, withTx bool) {
 	}
 
 	assert.NotNil(t, playersWithActions, "Players should have actions available now")
-	assert.Equal(t, 1, playersWithActions["player0"].MaxActions, "player0 should have 0 actions available")
-	assert.Equal(t, 1, playersWithActions["player1"].MaxActions, "player1 should have 1 action available")
-	assert.Equal(t, 2, playersWithActions["player2"].MaxActions, "player2 should have 2 actions available")
+	assert.Equal(t, 1, playersWithActions["player0"].MaxActions, "player0 should have 0 actions per-turn")
+	assert.Equal(t, 1, playersWithActions["player1"].MaxActions, "player1 should have 1 actions per-turn")
+	assert.Equal(t, 2, playersWithActions["player2"].MaxActions, "player2 should have 2 actions per-turn")
 	assert.Equal(t, 1, playersWithActions["player2"].ActionsCompleted, "player2 should have completed 1 action")
 
-	query = `INSERT INTO actions(nation_id, action_type, is_new_turn, timestamp) VALUES
-	(2, 'move', 0, '2025-01-01 07:00:00'),
-	(3, 'move', 0, '2025-01-01 08:00:00')`
-	if withTx {
-		_, err = tx.Exec(query)
-	} else {
-		_, err = tdb.Exec(query)
-	}
-	if !assert.NoError(t, err) {
+	if !assert.NoError(t, AddTurnEndActionEntry(time.Date(2025, 1, 1, 8, 0, 0, 0, time.UTC), tx)) {
 		t.FailNow()
 	}
+	if !assert.NoError(t, AddPlayerActionEntry("move", "player0", time.Date(2025, 1, 1, 9, 0, 0, 0, time.UTC), tx)) {
+		t.FailNow()
+	}
+	if !assert.NoError(t, AddPlayerActionEntry("move", "player1", time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC), tx)) {
+		t.FailNow()
+	}
+
+	if withTx && !assert.NoError(t, tx.Commit()) {
+		t.FailNow()
+	}
+
 	assert.Equal(t, 1, turnEnds)
 }
 

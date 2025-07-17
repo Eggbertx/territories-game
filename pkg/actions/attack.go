@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
+	"github.com/Eggbertx/territories-game/pkg/db"
 	"github.com/rs/zerolog"
 )
 
@@ -54,10 +55,10 @@ type AttackAction struct {
 	Logger             zerolog.Logger
 }
 
-func (aa *AttackAction) DoAction(db *sql.DB) (ActionResult, error) {
+func (aa *AttackAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	cfg, _ := config.GetConfig()
 
-	err := ValidateUser(aa.User, db, aa.Logger)
+	err := db.ValidateUser(aa.User, tdb, aa.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -92,19 +93,19 @@ func (aa *AttackAction) DoAction(db *sql.DB) (ActionResult, error) {
 	}
 
 	if cfg.DoCounterattack {
-		return aa.doAttackWithCounter(db, attackingTerritory, defendingTerritory)
+		return aa.doAttackWithCounter(tdb, attackingTerritory, defendingTerritory)
 	}
-	return aa.doNormalAttack(db, attackingTerritory, defendingTerritory)
+	return aa.doNormalAttack(tdb, attackingTerritory, defendingTerritory)
 }
 
-func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {
+func (aa *AttackAction) doNormalAttack(tdb *sql.DB, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {
 	infoEv := aa.Logger.Info()
 	errEv := aa.Logger.Err(nil)
 	defer config.DiscardLogEvents(infoEv, errEv)
 
 	var attacking, defending int
 	const attackSQL = `SELECT army_size FROM v_nation_holdings WHERE territory = ?`
-	stmt, err := db.Prepare(attackSQL + "  AND player = ?")
+	stmt, err := tdb.Prepare(attackSQL + "  AND player = ?")
 	if err != nil {
 		aa.Logger.Err(err).Caller().Msg("Unable to prepare attack query")
 		return nil, err
@@ -127,7 +128,7 @@ func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defending
 		return nil, err
 	}
 
-	stmt, err = db.Prepare(attackSQL)
+	stmt, err = tdb.Prepare(attackSQL)
 	if err != nil {
 		aa.Logger.Err(err).Caller().Msg("Unable to prepare defending query")
 		return nil, err
@@ -164,12 +165,12 @@ func (aa *AttackAction) doNormalAttack(db *sql.DB, attackingTerritory, defending
 		// defending armies destroyed
 		defenderLosses = int(math.Min(losses, float64(defending)))
 		config.LogInt("defenderLosses", defenderLosses, infoEv, errEv)
-		nationRemoved, err = UpdateHoldingArmySize(db, nil, defendingTerritory.Abbreviation, defending-defenderLosses, true, aa.Logger)
+		nationRemoved, err = db.UpdateHoldingArmySize(tdb, nil, defendingTerritory.Abbreviation, defending-defenderLosses, true, aa.Logger)
 	} else {
 		// attacking armies destroyed
 		attackerLosses = int(math.Min(math.Abs(losses), float64(attacking)))
 		config.LogInt("attackerLosses", attackerLosses, infoEv, errEv)
-		nationRemoved, err = UpdateHoldingArmySize(db, nil, attackingTerritory.Abbreviation, attacking-attackerLosses, true, aa.Logger)
+		nationRemoved, err = db.UpdateHoldingArmySize(tdb, nil, attackingTerritory.Abbreviation, attacking-attackerLosses, true, aa.Logger)
 	}
 	if err != nil {
 		aa.Logger.Err(err).Caller().Msg("Unable to update holding army size")

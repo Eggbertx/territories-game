@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
+	"github.com/Eggbertx/territories-game/pkg/db"
 	"github.com/rs/zerolog"
 )
 
@@ -39,11 +40,11 @@ type RaiseAction struct {
 	Logger    zerolog.Logger
 }
 
-func (ra *RaiseAction) DoAction(db *sql.DB) (ActionResult, error) {
+func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	infoEv := ra.Logger.Info()
 	defer infoEv.Discard()
 
-	err := ValidateUser(ra.User, db, ra.Logger)
+	err := db.ValidateUser(ra.User, tdb, ra.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +66,7 @@ func (ra *RaiseAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	stmt, err := db.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
+	stmt, err := tdb.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
 	if err != nil {
 		ra.Logger.Err(err).Caller().Msg("Unable to prepare raise check statement")
 		return nil, err
@@ -87,7 +88,7 @@ func (ra *RaiseAction) DoAction(db *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	if _, err = UpdateHoldingArmySize(db, nil, territory.Abbreviation, armySize+1, false, ra.Logger); err != nil {
+	if _, err = db.UpdateHoldingArmySize(tdb, nil, territory.Abbreviation, armySize+1, false, ra.Logger); err != nil {
 		return nil, err
 	}
 

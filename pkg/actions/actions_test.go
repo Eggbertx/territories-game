@@ -208,7 +208,7 @@ var (
 				if err == nil {
 					t.FailNow()
 				}
-				assert.ErrorIs(t, err, ErrColorInUse)
+				assert.ErrorIs(t, err, db.ErrColorInUse)
 
 				var color string
 				err = d.QueryRow("SELECT color FROM nations WHERE player = 'Test User 1'").Scan(&color)
@@ -233,7 +233,7 @@ var (
 			},
 			expectError: true,
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
-				assert.ErrorIs(t, err, ErrUserNotRegistered)
+				assert.ErrorIs(t, err, db.ErrUserNotRegistered)
 
 				var color string
 				err = d.QueryRow("SELECT color FROM nations WHERE player = 'Unregistered User'").Scan(&color)
@@ -291,7 +291,7 @@ var (
 			},
 			expectError: true,
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
-				assert.ErrorIs(t, err, ErrUserNotRegistered)
+				assert.ErrorIs(t, err, db.ErrUserNotRegistered)
 
 				var armySize int
 				err = d.QueryRow("SELECT army_size FROM holdings WHERE territory = 'CA'").Scan(&armySize)
@@ -554,11 +554,11 @@ var (
 				},
 			},
 			expectError: true,
-			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
-				assert.ErrorIs(t, err, ErrUserNotRegistered)
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				assert.ErrorIs(t, err, db.ErrUserNotRegistered)
 
 				var armySize int
-				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				err = d.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
 				assert.ErrorIs(t, err, sql.ErrNoRows, "expected no armies in CA since Unregistered User cannot raise armies")
 			},
 		},
@@ -776,6 +776,7 @@ type actionsTestCase struct {
 	desc              string
 	events            []Action
 	expectError       bool
+	doTurnChecking    bool
 	beforeEachEvent   func(*testing.T, *sql.DB, int) error
 	doValidateQueries func(*testing.T, *sql.DB, error)
 	doValidateResults func(*testing.T, []ActionResult)
@@ -788,6 +789,8 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 	if !assert.NoError(t, err, "failed to get testing config") {
 		t.FailNow()
 	}
+	cfg.DoTurnManagement = tc.doTurnChecking
+	config.SetConfig(cfg)
 	assert.NoFileExists(t, cfg.DBFile, "expected no database file to exist before test")
 	tc.db, err = db.GetDB()
 	if !assert.NoError(t, err, "failed to get test database") {

@@ -3,17 +3,14 @@ package actions
 import (
 	"database/sql"
 	"errors"
+
+	"github.com/Eggbertx/territories-game/pkg/db"
 )
 
 var (
 	ErrInvalidAction            = errors.New(`action must be join, move, or attack`)
-	ErrMissingUser              = errors.New("unset user string")
-	ErrUserNotRegistered        = errors.New("user is not registered in the game")
 	ErrNoTargetTerritory        = errors.New("missing target territory name or abbreviation")
-	ErrPlayerAlreadyJoined      = errors.New("the player already joined")
-	ErrNationAlreadyJoined      = errors.New("a nation with the given name already exists")
 	ErrTerritoryAlreadyOccupied = errors.New("the territory is already occupied")
-	ErrColorInUse               = errors.New("color already in use by another player")
 	testInt                     int // for testing purposes, to avoid random number generation in tests
 	useTestInt                  bool
 )
@@ -49,7 +46,7 @@ func (arb *actionResultBase[a]) String() string {
 		return noActionString
 	}
 	if arb.user == "" {
-		return ErrMissingUser.Error()
+		return db.ErrMissingUser.Error()
 	}
 
 	return ""
