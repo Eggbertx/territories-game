@@ -13,6 +13,7 @@
 	"actionsPerTurnHoldingsDivisor": 3,
 	"turnEndsWhenAllPlayersDone": true,
 	"turnDuration": "1d",
+	"doTurnManagement": true,
 	"territories": [
 		{
 			"abbr": "AL",

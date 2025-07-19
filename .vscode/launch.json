@@ -5,13 +5,44 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Debug Join",
+			"name": "Debug Join Player 1",
 			"type": "go",
 			"request": "launch",
 			"mode": "debug",
+			"buildFlags": ["-tags=sqlite_math_functions"],
 			"cwd": "${workspaceFolder}",
 			"program": "${workspaceFolder}/cmd/territories-referee",
-			"args": ["join", "-user", "Test User", "-nation", "Test Nation", "-territory", "HI"],
+			"args": ["join", "-user", "Player1", "-nation", "Test Nation 1", "-territory", "HI"],
+		},
+		{
+			"name": "Debug Join Player 2",
+			"type": "go",
+			"request": "launch",
+			"mode": "debug",
+			"buildFlags": ["-tags=sqlite_math_functions"],
+			"cwd": "${workspaceFolder}",
+			"program": "${workspaceFolder}/cmd/territories-referee",
+			"args": ["join", "-user", "Player2", "-nation", "Test Nation 2", "-territory", "KS"],
+		},
+		{
+			"name": "Debug Raise Player 1",
+			"type": "go",
+			"request": "launch",
+			"mode": "debug",
+			"buildFlags": ["-tags=sqlite_math_functions"],
+			"cwd": "${workspaceFolder}",
+			"program": "${workspaceFolder}/cmd/territories-referee",
+			"args": ["raise", "-user", "Player1", "-territory", "HI"]
+		},
+		{
+			"name": "Debug Raise Player 2",
+			"type": "go",
+			"request": "launch",
+			"mode": "debug",
+			"buildFlags": ["-tags=sqlite_math_functions"],
+			"cwd": "${workspaceFolder}",
+			"program": "${workspaceFolder}/cmd/territories-referee",
+			"args": ["raise", "-user", "Player2", "-territory", "KS"]
 		}
 	]
 }
