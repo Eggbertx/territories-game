@@ -21,37 +21,41 @@ func RegisterTurnEndHandler(handler func(time.Time, TurnEndReason) error) {
 
 // CurrentTurnStarted returns the timestamp of the current turn's start time and whether the current turn is the first turn
 func CurrentTurnStarted() (time.Time, bool, error) {
-	var turnTimestamp time.Time
-	db, err := db.GetDB()
+	// var turnTimestampStr sql.NullString
+	var turnTimestamp db.SQLite3Timestamp
+	tdb, err := db.GetDB()
 	if err != nil {
-		return turnTimestamp, false, err
+		return turnTimestamp.Time, false, err
 	}
-	stmt, err := db.Prepare("SELECT MAX(timestamp) FROM v_new_turn_actions")
+	stmt, err := tdb.Prepare("SELECT MAX(timestamp) FROM v_new_turn_actions")
 	if err != nil {
-		return turnTimestamp, false, err
+		return turnTimestamp.Time, false, err
 	}
 	defer stmt.Close()
 	if err = stmt.QueryRow().Scan(&turnTimestamp); err != nil {
-		return turnTimestamp, false, err
+		return turnTimestamp.Time, false, err
 	}
 	if err = stmt.Close(); err != nil {
-		return turnTimestamp, false, err
+		return turnTimestamp.Time, false, err
 	}
 
-	firstTurn := turnTimestamp.IsZero()
+	firstTurn := turnTimestamp.Time.IsZero()
 	if firstTurn {
 		// still on the first turn, get the first action and use its timestamp
-		stmt, err = db.Prepare("SELECT MIN(timestamp) FROM actions")
+		stmt, err = tdb.Prepare("SELECT MIN(timestamp) FROM actions")
 		if err != nil {
-			return turnTimestamp, firstTurn, err
+			return turnTimestamp.Time, firstTurn, err
 		}
 		defer stmt.Close()
 		if err = stmt.QueryRow().Scan(&turnTimestamp); err != nil {
-			return turnTimestamp, firstTurn, err
+			return turnTimestamp.Time, firstTurn, err
+		}
+		if err = stmt.Close(); err != nil {
+			return turnTimestamp.Time, firstTurn, err
 		}
 	}
 
-	return turnTimestamp, firstTurn, nil
+	return turnTimestamp.Time, firstTurn, nil
 }
 
 // MaxPlayerActionsPerTurn calculates the number of actions a player can take per turn based on their holdings and the configured divisor.
@@ -122,6 +126,14 @@ func PlayerActionsRemaining(player string, tx *sql.Tx) (int, error) {
 		return 0, nil // No actions available if total turns is 0
 	}
 
+	isDone, err := IsTurnDone(tx)
+	if err != nil {
+		return 0, err
+	}
+	if isDone {
+		return totalTurns, nil
+	}
+
 	var actionsTaken int
 	stmt, err := tx.Prepare("SELECT COUNT(*) FROM v_actions WHERE timestamp > (SELECT MAX(timestamp) FROM v_new_turn_actions) AND player = ?")
 	if err != nil {
@@ -153,10 +165,7 @@ func EndTurn(reason TurnEndReason, tx *sql.Tx) error {
 	return nil
 }
 
-// AddPlayerActionEntry adds a new row in the actions table representing a turn action taken by a player.
-// It is assumed that this will be run at the end of an action handler function, after all necessary checks
-// have been made
-func AddPlayerActionEntry(actionType string, player string, timestamp time.Time, tx *sql.Tx) error {
+func addActionEntry(tx *sql.Tx, actionType string, player string, timestamp time.Time) error {
 	shouldCommit := tx == nil
 	if shouldCommit {
 		db, err := db.GetDB()
@@ -169,14 +178,27 @@ func AddPlayerActionEntry(actionType string, player string, timestamp time.Time,
 		}
 		defer tx.Rollback()
 	}
-	stmt, err := tx.Prepare(`INSERT INTO actions (action_type, nation_id, timestamp)
-		VALUES (?, (SELECT id FROM nations WHERE player = ?), ?)`)
+
+	var stmt *sql.Stmt
+	var err error
+	var args []any
+	if player == "" {
+		stmt, err = tx.Prepare("INSERT INTO actions (action_type, timestamp, is_new_turn) VALUES ('end_turn', ?, 1)")
+		args = []any{timestamp}
+	} else {
+		stmt, err = tx.Prepare(`INSERT INTO actions (action_type, nation_id, timestamp)
+			VALUES (?, (SELECT id FROM nations WHERE player = ?), ?)`)
+		args = []any{actionType, player, timestamp}
+	}
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
+	if _, err = stmt.Exec(args...); err != nil {
+		return err
+	}
 
-	if _, err := stmt.Exec(actionType, player, timestamp); err != nil {
+	if _, err = HasTurnDurationExpired(tx); err != nil {
 		return err
 	}
 
@@ -186,33 +208,14 @@ func AddPlayerActionEntry(actionType string, player string, timestamp time.Time,
 	return nil
 }
 
+// AddPlayerActionEntry adds a new row in the actions table representing a turn action taken by a player.
+// It is assumed that this will be run at the end of an action handler function, after all necessary checks
+// have been made
+func AddPlayerActionEntry(tx *sql.Tx, actionType string, player string, timestamp time.Time) error {
+	return addActionEntry(tx, actionType, player, timestamp)
+}
+
 // AddTurnEndActionEntry adds a new row in the actions table representing the end of a turn.
 func AddTurnEndActionEntry(timestamp time.Time, tx *sql.Tx) error {
-	shouldCommit := tx == nil
-	if shouldCommit {
-		db, err := db.GetDB()
-		if err != nil {
-			return err
-		}
-		tx, err = db.Begin()
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
-	}
-
-	stmt, err := tx.Prepare("INSERT INTO actions (action_type, timestamp, is_new_turn) VALUES ('end_turn', ?, 1)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	if _, err = stmt.Exec(timestamp); err != nil {
-		return err
-	}
-
-	if shouldCommit {
-		return tx.Commit()
-	}
-	return nil
+	return addActionEntry(tx, "end_turn", "", timestamp)
 }

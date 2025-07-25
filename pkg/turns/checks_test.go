@@ -37,13 +37,13 @@ func setupTurnCheckDB(t *testing.T) *sql.DB {
 		t.FailNow()
 	}
 
-	if !assert.NoError(t, AddPlayerActionEntry("join", "player0", time.Date(2025, 1, 1, 1, 0, 0, 0, time.UTC), nil)) {
+	if !assert.NoError(t, AddPlayerActionEntry(nil, "join", "player0", time.Date(2025, 1, 1, 1, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
-	if !assert.NoError(t, AddPlayerActionEntry("join", "player1", time.Date(2025, 1, 1, 2, 0, 0, 0, time.UTC), nil)) {
+	if !assert.NoError(t, AddPlayerActionEntry(nil, "join", "player1", time.Date(2025, 1, 1, 2, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
-	if !assert.NoError(t, AddPlayerActionEntry("join", "player2", time.Date(2025, 1, 1, 3, 0, 0, 0, time.UTC), nil)) {
+	if !assert.NoError(t, AddPlayerActionEntry(nil, "join", "player2", time.Date(2025, 1, 1, 3, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
 
@@ -53,7 +53,9 @@ func setupTurnCheckDB(t *testing.T) *sql.DB {
 func doTestAreAllPlayersFinished(t *testing.T, withTx bool) {
 	turnEndHandlers = nil
 	var turnEnds int
-	RegisterTurnEndHandler(func(_ time.Time, _ TurnEndReason) error {
+	var turnEndReason TurnEndReason
+	RegisterTurnEndHandler(func(_ time.Time, reason TurnEndReason) error {
+		turnEndReason = reason
 		turnEnds++
 		return nil
 	})
@@ -92,13 +94,13 @@ func doTestAreAllPlayersFinished(t *testing.T, withTx bool) {
 	if !assert.NoError(t, AddTurnEndActionEntry(time.Date(2025, 1, 1, 4, 0, 0, 0, time.UTC), tx)) {
 		t.FailNow()
 	}
-	if !assert.NoError(t, AddPlayerActionEntry("move", "player0", time.Date(2025, 1, 1, 5, 0, 0, 0, time.UTC), tx)) {
+	if !assert.NoError(t, AddPlayerActionEntry(tx, "move", "player0", time.Date(2025, 1, 1, 5, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
-	if !assert.NoError(t, AddPlayerActionEntry("move", "player1", time.Date(2025, 1, 1, 6, 0, 0, 0, time.UTC), tx)) {
+	if !assert.NoError(t, AddPlayerActionEntry(tx, "move", "player1", time.Date(2025, 1, 1, 6, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
-	if !assert.NoError(t, AddPlayerActionEntry("move", "player2", time.Date(2025, 1, 1, 7, 0, 0, 0, time.UTC), tx)) {
+	if !assert.NoError(t, AddPlayerActionEntry(tx, "move", "player2", time.Date(2025, 1, 1, 7, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
 
@@ -116,10 +118,10 @@ func doTestAreAllPlayersFinished(t *testing.T, withTx bool) {
 	if !assert.NoError(t, AddTurnEndActionEntry(time.Date(2025, 1, 1, 8, 0, 0, 0, time.UTC), tx)) {
 		t.FailNow()
 	}
-	if !assert.NoError(t, AddPlayerActionEntry("move", "player0", time.Date(2025, 1, 1, 9, 0, 0, 0, time.UTC), tx)) {
+	if !assert.NoError(t, AddPlayerActionEntry(tx, "move", "player0", time.Date(2025, 1, 1, 9, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
-	if !assert.NoError(t, AddPlayerActionEntry("move", "player1", time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC), tx)) {
+	if !assert.NoError(t, AddPlayerActionEntry(tx, "move", "player1", time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC))) {
 		t.FailNow()
 	}
 
@@ -128,6 +130,7 @@ func doTestAreAllPlayersFinished(t *testing.T, withTx bool) {
 	}
 
 	assert.Equal(t, 1, turnEnds)
+	assert.Equal(t, TurnEndReasonPlayersAllDone, turnEndReason, "Turn should end because all players have completed their actions")
 }
 
 func TestAreAllPlayersFinished(t *testing.T) {

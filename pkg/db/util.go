@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net"
+	"time"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
+	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 )
 
@@ -19,25 +20,39 @@ var (
 )
 
 // EnoughPlayersToStart checks if there are enough players to start the game based on the configured minimum number of nations.
-func EnoughPlayersToStart() (bool, error) {
-	db, err := GetDB()
-	if err != nil {
-		return false, err
-	}
+func EnoughPlayersToStart(tx *sql.Tx) (bool, int, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
-	if db == nil {
-		return false, net.ErrClosed
+
+	shouldCommit := tx == nil
+	if shouldCommit {
+		db, err := GetDB()
+		if err != nil {
+			return false, 0, err
+		}
+		tx, err = db.Begin()
+		if err != nil {
+			return false, 0, err
+		}
+		defer tx.Rollback()
+	}
+
+	if cfg.MinimumNationsToStart <= 1 {
+		return true, 0, nil // No minimum nations required to start
 	}
 
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM nations").Scan(&count)
-	if err != nil {
-		return false, err
+	if err = tx.QueryRow("SELECT COUNT(*) FROM nations").Scan(&count); err != nil {
+		return false, 0, err
 	}
-	return count >= cfg.MinimumNationsToStart, nil
+	if shouldCommit {
+		if err = tx.Commit(); err != nil {
+			return false, count, err
+		}
+	}
+	return count >= cfg.MinimumNationsToStart, count, nil
 }
 
 // ValidateUser checks if the user is registered in the game by querying the nations table
@@ -186,4 +201,51 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 	}
 
 	return nationRemoved, err
+}
+
+// SQLite3Timestamp is used to represent timestamps in SQLite3 format that may scan into a time.Time, or a
+// string representation of a timestamp.
+// It implements the sql.Scanner interface to allow scanning from database rows.
+type SQLite3Timestamp sql.NullTime
+
+func (t *SQLite3Timestamp) Scan(value any) error {
+	if value == nil {
+		t.Time = time.Time{}
+		t.Valid = false
+		return nil
+	}
+	var nt sql.NullTime
+	if err := nt.Scan(&value); err == nil {
+		t.Time = nt.Time
+		t.Valid = nt.Valid
+		return nil
+	}
+	var timestampStr string
+	switch v := value.(type) {
+	case []byte:
+		timestampStr = string(v)
+	case string:
+		timestampStr = v
+	default:
+		return fmt.Errorf("cannot scan type %T into SQLite3Timestamp: %v", value, value)
+	}
+
+	err := t.parseSQLite3Timestamp(timestampStr)
+	if err != nil {
+		return err
+	}
+	t.Valid = true
+	return nil
+}
+
+// parseSQLite3Timestamp attempts to parse a given string as a timestamp
+func (t *SQLite3Timestamp) parseSQLite3Timestamp(ts string) (err error) {
+	for _, format := range sqlite3.SQLiteTimestampFormats {
+		t.Time, err = time.Parse(format, ts)
+		if err == nil {
+			return nil
+		}
+	}
+
+	return &time.ParseError{Value: ts, Message: ": invalid sqlite3 timestamp"}
 }

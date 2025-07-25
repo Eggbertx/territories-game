@@ -7,7 +7,6 @@ import (
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
-	"github.com/Eggbertx/territories-game/pkg/turns"
 	"github.com/rs/zerolog"
 )
 
@@ -107,17 +106,12 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 	defer tx.Rollback()
 
-	if cfg.DoTurnManagement {
-		actionsRemaining, err := turns.PlayerActionsRemaining(ma.User, tx)
-		if err != nil {
-			ma.Logger.Err(err).Caller().Msg("Unable to get player actions remaining")
-			return nil, err
-		}
-		if actionsRemaining <= 0 {
-			err = fmt.Errorf("no actions remaining for player %s", ma.User)
-			ma.Logger.Err(err).Caller().Send()
-			return nil, err
-		}
+	if err = checkIfEnoughPlayersToStart(tx, cfg, ma.Logger); err != nil {
+		return nil, err
+	}
+
+	if err = checkReturnsRemainingIfManaging(tx, ma.User, cfg, ma.Logger); err != nil {
+		return nil, err
 	}
 
 	var armiesInSourceTerritory, armiesInDestTerritory int
@@ -212,6 +206,10 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	// remove armies from source territory, if they lost armies in the attack and have no armies left, delete the holding
 	var nationRemoved bool
 	if nationRemoved, err = db.UpdateHoldingArmySize(tdb, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-ma.Armies, true, ma.Logger); err != nil {
+		return nil, err
+	}
+
+	if err = addTurnEntryIfManaging(tx, ma.User, "move", cfg, ma.Logger); err != nil {
 		return nil, err
 	}
 

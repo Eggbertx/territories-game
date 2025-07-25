@@ -60,13 +60,28 @@ func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
+	tx, err := tdb.Begin()
+	if err != nil {
+		ra.Logger.Err(err).Caller().Msg("Unable to begin transaction")
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	if err = checkIfEnoughPlayersToStart(tx, cfg, ra.Logger); err != nil {
+		return nil, err
+	}
+
+	if err = checkReturnsRemainingIfManaging(tx, ra.User, cfg, ra.Logger); err != nil {
+		return nil, err
+	}
+
 	territory, err := cfg.ResolveTerritory(ra.Territory)
 	if err != nil {
 		ra.Logger.Err(err).Caller().Send()
 		return nil, err
 	}
 
-	stmt, err := tdb.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
+	stmt, err := tx.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
 	if err != nil {
 		ra.Logger.Err(err).Caller().Msg("Unable to prepare raise check statement")
 		return nil, err
@@ -88,7 +103,16 @@ func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	if _, err = db.UpdateHoldingArmySize(tdb, nil, territory.Abbreviation, armySize+1, false, ra.Logger); err != nil {
+	if _, err = db.UpdateHoldingArmySize(tdb, tx, territory.Abbreviation, armySize+1, false, ra.Logger); err != nil {
+		return nil, err
+	}
+
+	if err = addTurnEntryIfManaging(tx, ra.User, "raise", cfg, ra.Logger); err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		ra.Logger.Err(err).Caller().Msg("Unable to commit transaction")
 		return nil, err
 	}
 

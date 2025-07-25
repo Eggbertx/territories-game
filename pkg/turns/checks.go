@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	TurnEndReasonTimeLimit TurnEndReason = iota
+	TurnEndReasonUnknown TurnEndReason = iota
+	TurnEndReasonTimeLimit
 	TurnEndReasonPlayersAllDone
 )
 
@@ -111,36 +112,66 @@ func HasTurnDurationExpired(tx *sql.Tx) (bool, error) {
 		return false, nil // turns have no time limit if turnDuration is unset or empty
 	}
 
-	db, err := db.GetDB()
+	tdb, err := db.GetDB()
 	if err != nil {
 		return false, err
 	}
 	shouldCommit := tx == nil
 	if shouldCommit {
-		tx, err = db.Begin()
+		tx, err = tdb.Begin()
 		if err != nil {
 			return false, err
 		}
 		defer tx.Rollback()
 	}
 
-	var lastTurnEndTime sql.NullTime
-	err = tx.QueryRow("SELECT MAX(timestamp) FROM v_new_turn_actions").Scan(&lastTurnEndTime)
+	var lastTurnEndTimestamp db.SQLite3Timestamp
+	var actionCount int
+	err = tx.QueryRow("SELECT MAX(timestamp), COUNT(*) FROM v_new_turn_actions").Scan(&lastTurnEndTimestamp, &actionCount)
 	if err != nil {
 		return false, err
 	}
 
-	if !lastTurnEndTime.Valid {
-		return false, nil // No previous turn end time found
+	if !lastTurnEndTimestamp.Valid || actionCount == 0 {
+		// return false, nil // No previous turn end time found
+		if err = tx.QueryRow("SELECT MIN(timestamp) FROM actions").Scan(&lastTurnEndTimestamp); err != nil {
+			return false, err
+		}
+		if !lastTurnEndTimestamp.Valid {
+			return false, nil
+		}
 	}
 
-	expired := lastTurnEndTime.Time.Add(turnDuration).Before(time.Now())
-	if expired && cfg.TurnEndsWhenAllPlayersDone {
-		err = EndTurn(TurnEndReasonTimeLimit, tx)
+	expired := lastTurnEndTimestamp.Time.Add(turnDuration).Before(time.Now())
+	if !expired {
+		return false, nil
+	}
+	if err = EndTurn(TurnEndReasonTimeLimit, tx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// IsTurnDone checks if the turn is done based on the configuration and player actions. If all players are
+// done or the turn duration has expired, it will insert a turn end entry and return true.
+func IsTurnDone(tx *sql.Tx) (bool, error) {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return false, err
+	}
+	var shouldEndTurn bool
+	if cfg.TurnEndsWhenAllPlayersDone {
+		playerActions, err := PlayersWithActionsLeft(tx)
 		if err != nil {
+			return false, err
+		}
+		shouldEndTurn = len(playerActions) == 0
+	}
+	if !shouldEndTurn && cfg.TurnDuration() > 0 {
+		if shouldEndTurn, err = HasTurnDurationExpired(tx); err != nil {
 			return false, err
 		}
 	}
 
-	return expired, nil
+	return shouldEndTurn, nil
 }

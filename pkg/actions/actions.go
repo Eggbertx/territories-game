@@ -19,10 +19,13 @@ const (
 	noActionString = "no action performed"
 )
 
+// Action is the interface that all in-game actions must implement
 type Action interface {
 	DoAction(db *sql.DB) (ActionResult, error)
 }
 
+// ActionResult is the interface returned by a successful DoAction call. A successful DoAction call
+// does not guarantee that the action done was successful (e.g., an attack may fail).
 type ActionResult interface {
 	ActionType() string
 	User() string

@@ -117,8 +117,14 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	if err = turns.AddPlayerActionEntry("join", ja.User, time.Now(), tx); err != nil {
-		errEv.Err(err).Caller().Msg("Unable to add player action entry")
+	if cfg.DoTurnManagement {
+		if err = turns.AddPlayerActionEntry(tx, "join", ja.User, time.Now()); err != nil {
+			errEv.Err(err).Caller().Msg("Unable to add player action entry")
+			return nil, err
+		}
+	}
+
+	if err = addTurnEntryIfManaging(tx, ja.User, "join", cfg, ja.Logger); err != nil {
 		return nil, err
 	}
 

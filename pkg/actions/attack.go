@@ -63,6 +63,14 @@ func (aa *AttackAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
+	if err = checkIfEnoughPlayersToStart(nil, cfg, aa.Logger); err != nil {
+		return nil, err
+	}
+
+	if err = checkReturnsRemainingIfManaging(nil, aa.User, cfg, aa.Logger); err != nil {
+		return nil, err
+	}
+
 	attackingTerritory, err := cfg.ResolveTerritory(aa.AttackingTerritory)
 	if err != nil {
 		aa.Logger.Err(err).Caller().Send()

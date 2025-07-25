@@ -773,13 +773,14 @@ var (
 )
 
 type actionsTestCase struct {
-	desc              string
-	events            []Action
-	expectError       bool
-	doTurnChecking    bool
-	beforeEachEvent   func(*testing.T, *sql.DB, int) error
-	doValidateQueries func(*testing.T, *sql.DB, error)
-	doValidateResults func(*testing.T, []ActionResult)
+	desc                  string
+	events                []Action
+	expectError           bool
+	doTurnChecking        bool
+	minimumPlayersToStart int
+	beforeEachEvent       func(*testing.T, *sql.DB, int) error
+	doValidateQueries     func(*testing.T, *sql.DB, error)
+	doValidateResults     func(*testing.T, []ActionResult)
 
 	db *sql.DB
 }
@@ -790,6 +791,7 @@ func runActionTestCase(t *testing.T, tc *actionsTestCase) {
 		t.FailNow()
 	}
 	cfg.DoTurnManagement = tc.doTurnChecking
+	cfg.MinimumNationsToStart = tc.minimumPlayersToStart
 	config.SetConfig(cfg)
 	assert.NoFileExists(t, cfg.DBFile, "expected no database file to exist before test")
 	tc.db, err = db.GetDB()
