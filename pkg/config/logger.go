@@ -1,24 +1,20 @@
 package config
 
 import (
+	"io"
 	"os"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/term"
 )
 
 var (
 	logger            zerolog.Logger
 	consolePrintJSON  bool
 	loggerInitialized bool
+	runningInTerminal = term.IsTerminal(int(os.Stdin.Fd()))
+	logFile           *os.File
 )
-
-func RunningInTerminal() bool {
-	fi, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) == os.ModeCharDevice
-}
 
 func DiscardLogEvents(ev ...*zerolog.Event) {
 	for _, e := range ev {
@@ -39,9 +35,9 @@ func LogInt(key string, val int, ev ...*zerolog.Event) {
 }
 
 func InitLogger(printJSON bool) error {
-	consolePrintJSON = printJSON || !RunningInTerminal()
-	var err error
+	consolePrintJSON = printJSON || !runningInTerminal
 	loggerInitialized = false // resets the logger
+	var err error
 	logger, err = GetLogger()
 	if err == nil {
 		loggerInitialized = true
@@ -57,29 +53,37 @@ func GetLogger() (zerolog.Logger, error) {
 
 	logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 
-	var consoleOut zerolog.Logger
-	var logFileOut zerolog.Logger
-	if !consolePrintJSON && RunningInTerminal() {
-		consoleOut = zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
-	} else {
-		consoleOut = zerolog.New(os.Stdout).With().Timestamp().Logger()
-	}
-
 	cfg, err := GetConfig()
 	if err != nil {
 		return logger, err
 	}
 
+	var writer zerolog.LevelWriter
+	var writers []io.Writer
+
+	if cfg.PrintLogToConsole {
+		if consolePrintJSON {
+			writers = append(writers, os.Stdout)
+		} else {
+			writers = append(writers, zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+				w.NoColor = !runningInTerminal
+			}))
+		}
+	}
 	if cfg.LogFile != "" {
-		logFile, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		logFile, err = os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
-			logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
 			return logger, err
 		}
-		logFileOut = zerolog.New(logFile)
-		logger = zerolog.New(zerolog.MultiLevelWriter(consoleOut, logFileOut))
+		writers = append(writers, logFile)
+	}
+
+	if len(writers) != 0 {
+		writer = zerolog.MultiLevelWriter(writers...)
+		logger = zerolog.New(writer).With().Timestamp().Logger()
 	} else {
-		logger = consoleOut
+		// If no file is specified and console logging is disabled, no logging will be done
+		logger = zerolog.Nop()
 	}
 	loggerInitialized = true
 	return logger, nil
