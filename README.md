@@ -5,7 +5,7 @@ A package and sample program that manages a Risk-style territorial conquest game
 This project is not meant to handle things like turn order, player management, etc. It only is meant to handle things like battle resolution, army management and migration, and map exporting based on the game events. A consuming application is expected to handle the rest of the game logic.
 
 # Building
-This project requires GCC, Make, and libsqlite3. If you are in Windows, you can use a tool like MSYS2, Cygwin(?), TDM-GCC, or similar to get these dependencies.
+This project requires GCC, Make, libsqlite3, and FFMPEG (for exporting a PNG file). If you are in Windows, you can use a tool like MSYS2, Cygwin(?), TDM-GCC, or similar to get these dependencies.
 
 To run tests, run `make test`.
 
