@@ -5,13 +5,9 @@ A package and sample program that manages a Risk-style territorial conquest game
 This project is not meant to handle things like turn order, player management, etc. It only is meant to handle things like battle resolution, army management and migration, and map exporting based on the game events. A consuming application is expected to handle the rest of the game logic.
 
 # Building
-Projects using territories-game must be built with the sqlite_math_functions tag, as it uses some SQLite math functions that are not included by default.
+This project requires GCC, Make, and libsqlite3. If you are in Windows, you can use a tool like MSYS2, Cygwin(?), TDM-GCC, or similar to get these dependencies.
 
-To build the sample program, run `go build -tags sqlite_math_functions ./cmd/territories-referee`.
-
-To run tests, run `go test -tags sqlite_math_functions ./pkg/...`.
-
-**Important:** The `sqlite_math_functions` tag is required if doTurnManagement is set to true (doTurnManagement determines whether turn management is handled automatically by the package)
+To run tests, run `make test`.
 
 # Usage
 When run, territories-referee will load config.json (see config.example.json for an example), connect to the SQLite database, and do the given action, if registered. The following actions are built-in:
