@@ -16,7 +16,7 @@ test: require_sqlite3
 	$(GO) test $(TESTFLAGS) ./cmd/... ./pkg/...
 
 clean:
-	rm -fv out/map* $(OUT)*
+	rm -fv out/map* out/*.log $(OUT) $(OUT).exe
 
 require_sqlite3:
 ifndef SQLITE3_LIB

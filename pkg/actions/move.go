@@ -18,7 +18,10 @@ const (
 )
 
 var (
-	ErrInvalidMove = errors.New("invalid move action format, expected 'move' or 'moveX' where X is the number of armies")
+	ErrInvalidMove             = errors.New("invalid move action format, expected 'move' or 'moveX' where X is the number of armies")
+	ErrMissingSourceTerritory  = errors.New("source territory not specified")
+	ErrMissingDestTerritory    = errors.New("destination territory not specified")
+	ErrSourceEqualsDestination = errors.New("source and destination territories cannot be the same")
 )
 
 type MoveActionResult struct {
@@ -65,9 +68,17 @@ type MoveAction struct {
 }
 
 func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
-	if ma.Destination == "" || ma.Source == ma.Destination {
-		ma.Logger.Err(ErrNoTargetTerritory).Caller().Send()
-		return nil, ErrNoTargetTerritory
+	if ma.Source == "" {
+		ma.Logger.Err(ErrMissingSourceTerritory).Caller().Send()
+		return nil, ErrMissingSourceTerritory
+	}
+	if ma.Destination == "" {
+		ma.Logger.Err(ErrMissingDestTerritory).Caller().Send()
+		return nil, ErrMissingDestTerritory
+	}
+	if ma.Source == ma.Destination {
+		ma.Logger.Err(ErrSourceEqualsDestination).Caller().Send()
+		return nil, ErrSourceEqualsDestination
 	}
 
 	cfg, err := config.GetConfig()

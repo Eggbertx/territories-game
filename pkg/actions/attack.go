@@ -194,7 +194,7 @@ func (aa *AttackAction) doNormalAttack(tdb *sql.DB, attackingTerritory, defendin
 	}, nil
 }
 
-func (aa *AttackAction) doAttackWithCounter(db *sql.DB, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {
+func (aa *AttackAction) doAttackWithCounter(_ *sql.DB, _, _ *config.Territory) (ActionResult, error) {
 	// Placeholder for Advance Wars-style attack logic
 	return nil, errors.New("counterattack logic not implemented yet")
 }

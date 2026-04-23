@@ -18,37 +18,57 @@ var (
 )
 
 type Config struct {
-	MapFile           string `json:"mapFile"`
-	DBFile            string `json:"dbFile"`
-	LogFile           string `json:"logFile"`
-	PrintLogToConsole bool   `json:"printLogToConsole"`
-	SVGOutFile        string `json:"svgOutFile"`
-	PNGOutFile        string `json:"pngOutFile"`
+	// MapFile is the path to the SVG input file
+	MapFile string `json:"mapFile"`
+
+	// DBFile is the path to the SQLite database file
+	DBFile string `json:"dbFile"`
+
+	// LogFile is the path to the log file
+	LogFile string `json:"logFile"`
+
+	// PrintLogToConsole indicates whether logs should also be printed to the console in addition to the log file
+	PrintLogToConsole bool `json:"printLogToConsole"`
+
+	// SVGOutFile is the path to the SVG output file with the current nations/players and territory holdings
+	SVGOutFile string `json:"svgOutFile"`
+
+	// PNGOutFile is the path to the exported PNG output file generated from the SVG output file
+	PNGOutFile string `json:"pngOutFile"`
 
 	// DoCounterattack will eventually be used to determine if a defending territory automatically counterattacks
 	DoCounterattack bool `json:"doCounterattack"`
+
 	// InitialArmies is the number of armies each player starts with in their initial territory.
 	InitialArmies int `json:"initialArmies"`
+
 	// MinimumNationsToStart is the minimum number of nations required before players can start taking turns, aside from color
 	MinimumNationsToStart int `json:"minimumNationsToStart"`
+
 	// MaxArmiesPerTerritory is the maximum number of armies that can be moved into or raised in a territory.
 	MaxArmiesPerTerritory int `json:"maxArmiesPerTerritory"`
+
 	// UnclaimedTerritoriesHave1Army indicates whether unclaimed territories are treated as having 1 army to destroy
 	// before a player can claim them.
 	UnclaimedTerritoriesHave1Army bool `json:"unclaimedTerritoriesHave1Army"`
+
 	// ActionsPerTurnHoldingsDivisor is used to determine how many actions a player can take per turn.
 	// A player can take ceil(holdings / ActionsPerTurnHoldingsDivisor) actions per turn.
 	ActionsPerTurnHoldingsDivisor float64 `json:"actionsPerTurnHoldingsDivisor"`
+
 	// TurnEndsWhenAllPlayersDone indicates whether a turn ends when all players have done all their actions. If TurnDurationString is
 	// unset, this must be true (otherwise, the turn will never end).
 	TurnEndsWhenAllPlayersDone bool `json:"turnEndsWhenAllPlayersDone"`
+
 	// TurnDurationString determines how long a turn lasts before it ends, if it is a zero value, the turn only ends when all players are done.
+	// It is expected to be a valid duration string parseable by `durationutil.ParseLongerDuration`
 	TurnDurationString string `json:"turnDuration,omitempty"`
 
 	// DoTurnManagement indicates whether turn management should be handled internally. If it is false, it is assumed that the consuming
 	// application will handle turn management, such as by using a timer or a game loop. Default is true.
 	DoTurnManagement bool `json:"doTurnManagement"`
 
+	// Territories is the list of valid territories that can be owned by players
 	Territories []Territory `json:"territories"`
 
 	turnDuration time.Duration
@@ -268,6 +288,7 @@ func CloseTestingConfig(t *testing.T) {
 
 func SetConfig(c *Config) {
 	if c != nil {
+		c.turnDuration, _ = durationutil.ParseLongerDuration(c.TurnDurationString)
 		cfg = c
 	}
 }

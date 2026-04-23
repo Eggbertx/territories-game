@@ -47,3 +47,8 @@ CREATE VIEW IF NOT EXISTS v_actions
 CREATE VIEW IF NOT EXISTS v_new_turn_actions
 	AS SELECT actions.id as id, timestamp
 	FROM actions WHERE is_new_turn = 1;
+
+CREATE VIEW IF NOT EXISTS v_current_turn_player_actions
+	AS SELECT player, count(*) as actions_completed FROM v_actions
+	WHERE id > COALESCE((SELECT MAX(id) FROM v_new_turn_actions), 0)
+	GROUP BY player;

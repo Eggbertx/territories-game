@@ -105,46 +105,14 @@ func MaxPlayerActionsPerTurn(player string, tx *sql.Tx) (int, error) {
 
 // PlayerActionsRemaining returns the number of actions a player can still take in the current turn.
 func PlayerActionsRemaining(player string, tx *sql.Tx) (int, error) {
-	shouldCommit := tx == nil
-	if shouldCommit {
-		db, err := db.GetDB()
-		if err != nil {
-			return 0, err
-		}
-		tx, err = db.Begin()
-		if err != nil {
-			return 0, err
-		}
-		defer tx.Rollback()
-	}
-
-	totalTurns, err := MaxPlayerActionsPerTurn(player, tx)
+	playersWithActions, err := PlayersWithActionsLeft(tx)
 	if err != nil {
 		return 0, err
 	}
-	if totalTurns == 0 {
-		return 0, nil // No actions available if total turns is 0
+	if actionInfo, ok := playersWithActions[player]; ok {
+		return actionInfo.MaxActions - actionInfo.ActionsCompleted, nil
 	}
-
-	isDone, err := IsTurnDone(tx)
-	if err != nil {
-		return 0, err
-	}
-	if isDone {
-		return totalTurns, nil
-	}
-
-	var actionsTaken int
-	stmt, err := tx.Prepare("SELECT COUNT(*) FROM v_actions WHERE timestamp > (SELECT MAX(timestamp) FROM v_new_turn_actions) AND player = ?")
-	if err != nil {
-		return 0, err
-	}
-	defer stmt.Close()
-	if err = stmt.QueryRow(player).Scan(&actionsTaken); err != nil {
-		return 0, err
-	}
-
-	return int(math.Min(float64(totalTurns-actionsTaken), 0)), nil
+	return 0, nil
 }
 
 // EndTurn ends the current turn, inserting a new action with is_new_turn set to true, and calling all registered turn end handlers.

@@ -22,28 +22,16 @@ type PlayerActions struct {
 	MaxActions       int
 }
 
-// PlayersWithActionsLeft returns a map of player names to PlayerActions for all players that still have actions available in the current turns.
-// If it is nil, all players have completed their actions. If all players are done and the configuration allows it, it will end the turn.
-func PlayersWithActionsLeft(tx *sql.Tx) (map[string]PlayerActions, error) {
-	const query = `SELECT q1.player, COALESCE(actions, 0) AS actions_completed, max_actions
+func queryPlayersWithActionsLeft(tx *sql.Tx, actionsPerTurnHoldingsDivisor float64) (map[string]PlayerActions, error) {
+	const query = `SELECT q1.player, coalesce(actions_completed, 0) as actions_completed, max_actions
 	FROM (
 		SELECT player, nation_id,
 			CEIL(COUNT(*) / ?) AS max_actions
 		FROM v_nation_holdings
 		GROUP BY player, nation_id
-	) q1 LEFT JOIN (
-		SELECT player, COUNT(*) AS actions
-		FROM v_actions
-		WHERE player IS NOT NULL
-		AND timestamp >= (SELECT COALESCE(MAX(timestamp),'0001-01-01') FROM v_new_turn_actions)
-		GROUP BY player
-	) q2 ON q1.player = q2.player
-	WHERE COALESCE(q2.actions, 0) < q1.max_actions`
+	) q1 LEFT JOIN v_current_turn_player_actions q2 ON q1.player = q2.player
+	WHERE COALESCE(q2.actions_completed, 0) < q1.max_actions`
 
-	cfg, err := config.GetConfig()
-	if err != nil {
-		return nil, err
-	}
 	db, err := db.GetDB()
 	if err != nil {
 		return nil, err
@@ -63,11 +51,12 @@ func PlayersWithActionsLeft(tx *sql.Tx) (map[string]PlayerActions, error) {
 	}
 	defer stmt.Close()
 
-	rows, err := stmt.Query(cfg.ActionsPerTurnHoldingsDivisor)
+	rows, err := stmt.Query(actionsPerTurnHoldingsDivisor)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var playerActions map[string]PlayerActions
 	for rows.Next() {
 		if playerActions == nil {
@@ -84,10 +73,51 @@ func PlayersWithActionsLeft(tx *sql.Tx) (map[string]PlayerActions, error) {
 		return nil, err
 	}
 
+	if shouldCommit {
+		if err = tx.Commit(); err != nil {
+			return playerActions, err
+		}
+	}
+	return playerActions, nil
+}
+
+// PlayersWithActionsLeft returns a map of player names to PlayerActions for all players that still have actions available in the current turns.
+// If all players are done and the configuration allows it, it will end the turn.
+func PlayersWithActionsLeft(tx *sql.Tx) (map[string]PlayerActions, error) {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := db.GetDB()
+	if err != nil {
+		return nil, err
+	}
+
+	shouldCommit := tx == nil
+	if shouldCommit {
+		tx, err = db.Begin()
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+	}
+
+	playerActions, err := queryPlayersWithActionsLeft(tx, cfg.ActionsPerTurnHoldingsDivisor)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(playerActions) == 0 && cfg.TurnEndsWhenAllPlayersDone {
 		// all players are done, configuration set to end turn when all players are done
 		if err = EndTurn(TurnEndReasonPlayersAllDone, tx); err != nil {
 			return playerActions, err
+		}
+
+		// re-query to get updated player actions after turn end
+		playerActions, err = queryPlayersWithActionsLeft(tx, cfg.ActionsPerTurnHoldingsDivisor)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if shouldCommit {
