@@ -66,9 +66,24 @@ func checkReturnsRemainingIfManaging(tx *sql.Tx, user string, cfg *config.Config
 			return err
 		}
 		if actionsRemaining < 1 {
-			err = fmt.Errorf("no actions remaining for player %s", user)
-			logger.Err(err).Caller(1).Send()
-			return err
+			dur := cfg.TurnDuration()
+			if dur <= 0 {
+				err = fmt.Errorf("no actions remaining for player %s", user)
+				logger.Err(err).Caller(1).Send()
+				return err
+			}
+
+			// check if turn duration has expired
+			shouldEndTurn, err := turns.HasTurnDurationExpired(tx)
+			if err != nil {
+				logger.Err(err).Caller(1).Msg("Unable to check if turn duration has expired")
+				return err
+			}
+			if !shouldEndTurn {
+				err = fmt.Errorf("no actions remaining for player %s", user)
+				logger.Err(err).Caller(1).Send()
+				return err
+			}
 		}
 	}
 
