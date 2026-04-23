@@ -84,7 +84,7 @@ func addTurnEntryIfManaging(tx *sql.Tx, user string, actionType string, cfg *con
 			return err
 		}
 	}
-	if !cfg.DoTurnManagement {
+	if cfg.DoTurnManagement {
 		if err := turns.AddPlayerActionEntry(tx, actionType, user, time.Now()); err != nil {
 			logger.Err(err).Caller(1).Msg("Unable to add player action entry")
 			return err

@@ -4,11 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
-	"github.com/Eggbertx/territories-game/pkg/turns"
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 )
@@ -115,13 +113,6 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		}
 		errEv.Err(err).Caller().Msg("Unable to add initial holding")
 		return nil, err
-	}
-
-	if cfg.DoTurnManagement {
-		if err = turns.AddPlayerActionEntry(tx, "join", ja.User, time.Now()); err != nil {
-			errEv.Err(err).Caller().Msg("Unable to add player action entry")
-			return nil, err
-		}
 	}
 
 	if err = addTurnEntryIfManaging(tx, ja.User, "join", cfg, ja.Logger); err != nil {
