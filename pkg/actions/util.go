@@ -11,7 +11,6 @@ import (
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
 	"github.com/Eggbertx/territories-game/pkg/turns"
-	"github.com/rs/zerolog"
 )
 
 func randInt(max int) int {
@@ -21,12 +20,12 @@ func randInt(max int) int {
 	return rand.Intn(max)
 }
 
-func checkIfEnoughPlayersToStart(tx *sql.Tx, cfg *config.Config, logger zerolog.Logger) error {
+func checkIfEnoughPlayersToStart(tx *sql.Tx, cfg *config.Config, logger config.LoggerFunc) error {
 	if cfg == nil {
 		var err error
 		cfg, err = config.GetConfig()
 		if err != nil {
-			logger.Err(err).Caller(1).Msg("Unable to get configuration")
+			logger("Unable to get configuration", "error", err)
 			return err
 		}
 	}
@@ -37,51 +36,51 @@ func checkIfEnoughPlayersToStart(tx *sql.Tx, cfg *config.Config, logger zerolog.
 
 	enough, numPlayers, err := db.EnoughPlayersToStart(tx)
 	if err != nil {
-		logger.Err(err).Caller(1).Msg("Unable to check if enough players are joined")
+		logger("Unable to check if enough players are joined", "error", err)
 		return err
 	}
 
 	if !enough {
 		err = fmt.Errorf("not enough players to start the game, minimum required: %d, currently joined: %d", cfg.MinimumNationsToStart, numPlayers)
-		logger.Err(err).Caller(1).Send()
+		logger("Not enough players to start the game", "minimumRequired", cfg.MinimumNationsToStart, "currentlyJoined", numPlayers, "error", err)
 		return err
 	}
 
 	return nil
 }
 
-func checkReturnsRemainingIfManaging(tx *sql.Tx, user string, cfg *config.Config, logger zerolog.Logger) error {
+func checkReturnsRemainingIfManaging(tx *sql.Tx, user string, cfg *config.Config, logger config.LoggerFunc) error {
 	var err error
 	if cfg == nil {
 		cfg, err = config.GetConfig()
 		if err != nil {
-			logger.Err(err).Caller(1).Msg("Unable to get configuration")
+			logger("Unable to get configuration", "error", err)
 			return err
 		}
 	}
 	if cfg.DoTurnManagement {
 		actionsRemaining, err := turns.PlayerActionsRemaining(user, tx)
 		if err != nil {
-			logger.Err(err).Caller(1).Msg("Unable to get player actions remaining")
+			logger("Unable to get player actions remaining", "error", err)
 			return err
 		}
 		if actionsRemaining < 1 {
 			dur := cfg.TurnDuration()
 			if dur <= 0 {
 				err = fmt.Errorf("no actions remaining for player %s", user)
-				logger.Err(err).Caller(1).Send()
+				logger("Out of actions", "player", user, "error", err)
 				return err
 			}
 
 			// check if turn duration has expired
 			shouldEndTurn, err := turns.HasTurnDurationExpired(tx)
 			if err != nil {
-				logger.Err(err).Caller(1).Msg("Unable to check if turn duration has expired")
+				logger("Unable to check if turn duration has expired", "error", err)
 				return err
 			}
 			if !shouldEndTurn {
 				err = fmt.Errorf("no actions remaining for player %s", user)
-				logger.Err(err).Caller(1).Send()
+				logger("Out of actions", "player", user, "error", err)
 				return err
 			}
 		}
@@ -90,18 +89,14 @@ func checkReturnsRemainingIfManaging(tx *sql.Tx, user string, cfg *config.Config
 	return nil
 }
 
-func addTurnEntryIfManaging(tx *sql.Tx, user string, actionType string, cfg *config.Config, logger zerolog.Logger) error {
-	if cfg == nil {
-		var err error
-		cfg, err = config.GetConfig()
-		if err != nil {
-			logger.Err(err).Caller(1).Msg("Unable to get configuration")
-			return err
-		}
+func addTurnEntryIfManaging(tx *sql.Tx, user string, actionType string) error {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return err
 	}
 	if cfg.DoTurnManagement {
 		if err := turns.AddPlayerActionEntry(tx, actionType, user, time.Now()); err != nil {
-			logger.Err(err).Caller(1).Msg("Unable to add player action entry")
+			cfg.LogError("Unable to add player action entry", "error", err)
 			return err
 		}
 	}

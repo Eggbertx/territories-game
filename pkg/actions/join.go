@@ -8,7 +8,6 @@ import (
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
 	"github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -39,40 +38,30 @@ type JoinAction struct {
 	User      string
 	Nation    string
 	Territory string
-
-	Logger zerolog.Logger
 }
 
 func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log, _ := config.GetLogger()
-		log.Err(err).Caller().Msg("Unable to get configuration")
 		return nil, err
 	}
-
-	infoEv := ja.Logger.Info()
-	errEv := ja.Logger.Err(nil)
-	config.LogString("nation", ja.Nation, infoEv, errEv)
-	config.LogString("territory", ja.Territory, infoEv, errEv)
-	defer config.DiscardLogEvents(infoEv, errEv)
 
 	if ja.Nation == "" {
 		ja.Nation = fmt.Sprintf("%s's Nation", ja.User)
 	}
 	if ja.Territory == "" {
-		ja.Logger.Err(ErrNoTargetTerritory).Caller().Send()
+		cfg.LogError("No target territory specified")
 		return nil, ErrNoTargetTerritory
 	}
 	joinTerritory, err := cfg.ResolveTerritory(ja.Territory)
 	if err != nil {
-		errEv.Err(err).Caller().Send()
+		cfg.LogError("Unable to resolve territory", "error", err)
 		return nil, err
 	}
 
 	tx, err := tdb.Begin()
 	if err != nil {
-		errEv.Err(err).Caller().Msg("Unable to begin transaction")
+		cfg.LogError("Unable to begin transaction", "error", err)
 		return nil, err
 	}
 	defer tx.Rollback()
@@ -86,41 +75,42 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	var numPlayerMatches int
 	var numNationMatches int
 	if err = tx.QueryRow(userAlreadyJoinedSQL, ja.User).Scan(&numPlayerMatches); err != nil {
-		errEv.Err(err).Caller().Send()
+		cfg.LogError("Error querying user", "error", err)
 		return nil, err
 	}
 	if numPlayerMatches > 0 {
-		errEv.Err(db.ErrPlayerAlreadyJoined).Caller().Send()
+		cfg.LogError("Player has already joined a nation")
 		return nil, db.ErrPlayerAlreadyJoined
 	}
 
 	if err = tx.QueryRow(nationAlreadyJoinedSQL, ja.Nation).Scan(&numNationMatches); err != nil {
-		errEv.Err(err).Caller().Send()
+		cfg.LogError("Error querying nation", "error", err)
 		return nil, err
 	}
 	if numNationMatches > 0 {
-		errEv.Err(db.ErrNationAlreadyJoined).Caller().Send()
+		cfg.LogError("Nation with the given name already exists")
 		return nil, db.ErrNationAlreadyJoined
 	}
 
 	if _, err = tx.Exec(nationAddSQL, ja.Nation, ja.User, randomColor()); err != nil {
-		errEv.Err(err).Caller().Msg("Unable to add nation")
+		cfg.LogError("Unable to add nation", "error", err)
 		return nil, err
 	}
 	if _, err = tx.Exec(nationInitialHolding, ja.Nation, joinTerritory.Abbreviation, cfg.InitialArmies); err != nil {
 		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
 			err = ErrTerritoryAlreadyOccupied
 		}
-		errEv.Err(err).Caller().Msg("Unable to add initial holding")
+		cfg.LogError("Unable to add initial holding", "error", err)
 		return nil, err
 	}
 
-	if err = addTurnEntryIfManaging(tx, ja.User, "join", cfg, ja.Logger); err != nil {
+	if err = addTurnEntryIfManaging(tx, ja.User, "join"); err != nil {
+		cfg.LogError("Unable to add turn entry", "error", err)
 		return nil, err
 	}
 
 	if err = tx.Commit(); err != nil {
-		errEv.Err(err).Caller().Msg("Unable to commit transaction")
+		cfg.LogError("Unable to commit transaction", "error", err)
 		return nil, err
 	}
 

@@ -7,7 +7,6 @@ import (
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -37,53 +36,47 @@ func (rar *RaiseActionResult) String() string {
 type RaiseAction struct {
 	User      string
 	Territory string
-	Logger    zerolog.Logger
 }
 
 func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
-	infoEv := ra.Logger.Info()
-	defer infoEv.Discard()
-
-	err := db.ValidateUser(ra.User, tdb, ra.Logger)
+	cfg, err := config.GetConfig()
 	if err != nil {
+		return nil, err
+	}
+
+	if err = db.ValidateUser(ra.User, tdb, cfg.LogError); err != nil {
 		return nil, err
 	}
 
 	if ra.Territory == "" {
-		ra.Logger.Err(ErrNoTargetTerritory).Caller().Send()
+		cfg.LogError("No target territory specified")
 		return nil, ErrNoTargetTerritory
-	}
-
-	cfg, err := config.GetConfig()
-	if err != nil {
-		ra.Logger.Err(err).Caller().Msg("Unable to get configuration")
-		return nil, err
 	}
 
 	tx, err := tdb.Begin()
 	if err != nil {
-		ra.Logger.Err(err).Caller().Msg("Unable to begin transaction")
+		cfg.LogError("Unable to begin transaction", "error", err)
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	if err = checkIfEnoughPlayersToStart(tx, cfg, ra.Logger); err != nil {
+	if err = checkIfEnoughPlayersToStart(tx, cfg, cfg.LogError); err != nil {
 		return nil, err
 	}
 
-	if err = checkReturnsRemainingIfManaging(tx, ra.User, cfg, ra.Logger); err != nil {
+	if err = checkReturnsRemainingIfManaging(tx, ra.User, cfg, cfg.LogError); err != nil {
 		return nil, err
 	}
 
 	territory, err := cfg.ResolveTerritory(ra.Territory)
 	if err != nil {
-		ra.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to resolve territory", "error", err)
 		return nil, err
 	}
 
 	stmt, err := tx.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
 	if err != nil {
-		ra.Logger.Err(err).Caller().Msg("Unable to prepare raise check statement")
+		cfg.LogError("Unable to prepare raise check statement", "error", err)
 		return nil, err
 	}
 	defer stmt.Close()
@@ -93,26 +86,26 @@ func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = fmt.Errorf("no armies in %s controlled by %s to raise", territory.Name, ra.User)
 		}
-		ra.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to check raise conditions", "error", err)
 		return nil, err
 	}
 
 	if armySize == cfg.MaxArmiesPerTerritory {
 		err = fmt.Errorf("cannot raise army size in %s: already at maximum of %d", territory.Name, cfg.MaxArmiesPerTerritory)
-		ra.Logger.Err(err).Caller().Send()
+		cfg.LogError("Not enough actions remaining", "player", ra.User, "error", err)
 		return nil, err
 	}
 
-	if _, err = db.UpdateHoldingArmySize(tdb, tx, territory.Abbreviation, armySize+1, false, ra.Logger); err != nil {
+	if _, err = db.UpdateHoldingArmySize(tdb, tx, territory.Abbreviation, armySize+1, false); err != nil {
 		return nil, err
 	}
 
-	if err = addTurnEntryIfManaging(tx, ra.User, "raise", cfg, ra.Logger); err != nil {
+	if err = addTurnEntryIfManaging(tx, ra.User, "raise"); err != nil {
 		return nil, err
 	}
 
 	if err = tx.Commit(); err != nil {
-		ra.Logger.Err(err).Caller().Msg("Unable to commit transaction")
+		cfg.LogError("Unable to commit transaction", "error", err)
 		return nil, err
 	}
 

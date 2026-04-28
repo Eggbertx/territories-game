@@ -1,28 +1,23 @@
 module github.com/Eggbertx/territories-game
 
-go 1.24.0
-
-toolchain go1.24.3
-
-require (
-	github.com/antchfx/xmlquery v1.4.4
-	github.com/mattn/go-sqlite3 v1.14.32
-	github.com/mazznoer/csscolorparser v0.1.6
-	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.11.1
-	golang.org/x/term v0.35.0
-)
+go 1.26.2
 
 require (
 	github.com/Eggbertx/durationutil v1.0.0
-	github.com/antchfx/xpath v1.3.5 // indirect
+	github.com/antchfx/xmlquery v1.5.1
+	github.com/mattn/go-sqlite3 v1.14.42
+	github.com/mazznoer/csscolorparser v0.1.8
+	github.com/stretchr/testify v1.11.1
+	golang.org/x/term v0.42.0
+)
+
+require (
+	github.com/antchfx/xpath v1.3.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

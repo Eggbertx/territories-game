@@ -1,9 +1,7 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"slices"
 	"strings"
@@ -14,8 +12,11 @@ import (
 )
 
 var (
-	cfg *Config
+	cfg                  *Config
+	ErrGameNotConfigured = fmt.Errorf("no active configuration has been set")
 )
+
+type LoggerFunc func(string, ...any)
 
 type Config struct {
 	// MapFile is the path to the SVG input file
@@ -24,11 +25,12 @@ type Config struct {
 	// DBFile is the path to the SQLite database file
 	DBFile string `json:"dbFile"`
 
-	// LogFile is the path to the log file
-	LogFile string `json:"logFile"`
+	LogInfo LoggerFunc `json:"-"`
 
-	// PrintLogToConsole indicates whether logs should also be printed to the console in addition to the log file
-	PrintLogToConsole bool `json:"printLogToConsole"`
+	LogError LoggerFunc `json:"-"`
+
+	// // PrintLogToConsole indicates whether logs should also be printed to the console in addition to the log file
+	// PrintLogToConsole bool `json:"printLogToConsole"`
 
 	// SVGOutFile is the path to the SVG output file with the current nations/players and territory holdings
 	SVGOutFile string `json:"svgOutFile"`
@@ -204,47 +206,44 @@ func (e *missingFieldError) Error() string {
 	return fmt.Sprintf("%s is required", e.field)
 }
 
-func openAndValidateConfig() (*Config, error) {
-	c := Config{
-		PrintLogToConsole:             true,
-		MaxArmiesPerTerritory:         5,
-		InitialArmies:                 3,
-		MinimumNationsToStart:         3,
-		ActionsPerTurnHoldingsDivisor: 3,
-		TurnEndsWhenAllPlayersDone:    true,
-		DoTurnManagement:              true,
+func validateConfig() (err error) {
+	if cfg == nil {
+		return ErrGameNotConfigured
 	}
-	fi, err := os.Open("config.json")
+	for t := range cfg.Territories {
+		cfg.Territories[t].cfg = cfg
+	}
+	if err = cfg.validateRequiredValues(); err != nil {
+		return fmt.Errorf("failed to validate required values: %w", err)
+	}
+	if err = cfg.validateUniqueness(); err != nil {
+		return fmt.Errorf("failed to validate uniqueness of territories: %w", err)
+	}
+	if err = cfg.validateNeighborMutuality(); err != nil {
+		return fmt.Errorf("failed to validate mutuality of neighbors: %w", err)
+	}
+	return nil
+}
+
+func SetActiveConfig(c *Config) error {
+	cfg = c
+	err := validateConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open config file: %w", err)
+		cfg = nil
+	} else {
+		if cfg.LogInfo == nil {
+			cfg.LogInfo = func(s string, a ...any) {}
+		}
+		if cfg.LogError == nil {
+			cfg.LogError = func(s string, a ...any) {}
+		}
 	}
-	defer fi.Close()
-	if err = json.NewDecoder(fi).Decode(&c); err != nil {
-		return nil, fmt.Errorf("failed to decode config file: %w", err)
-	}
-	for t := range c.Territories {
-		c.Territories[t].cfg = &c
-	}
-	if err = c.validateRequiredValues(); err != nil {
-		return nil, fmt.Errorf("failed to validate required values: %w", err)
-	}
-	if err = c.validateUniqueness(); err != nil {
-		return nil, fmt.Errorf("failed to validate uniqueness of territories: %w", err)
-	}
-	if err = c.validateNeighborMutuality(); err != nil {
-		return nil, fmt.Errorf("failed to validate mutuality of neighbors: %w", err)
-	}
-	return &c, nil
+	return err
 }
 
 func GetConfig() (*Config, error) {
 	if cfg == nil {
-		var err error
-		cfg, err = openAndValidateConfig()
-		if err != nil {
-			cfg = nil
-			return nil, err
-		}
+		return nil, ErrGameNotConfigured
 	}
 
 	return cfg, nil
@@ -257,10 +256,15 @@ func GetTestingConfig(t *testing.T) (*Config, error) {
 	if cfg == nil {
 		dir := t.TempDir()
 		cfg = &Config{
-			MapFile:                       path.Join(dir, "test.svg"),
-			DBFile:                        path.Join(dir, "test.db"),
-			LogFile:                       path.Join(dir, "test.log"),
-			PrintLogToConsole:             true,
+			MapFile: path.Join(dir, "test.svg"),
+			DBFile:  path.Join(dir, "test.db"),
+
+			LogInfo: func(s string, a ...any) {
+				t.Logf(s, a)
+			},
+			LogError: func(s string, a ...any) {
+				t.Errorf(s, a)
+			},
 			SVGOutFile:                    path.Join(dir, "test.svg"),
 			PNGOutFile:                    path.Join(dir, "test.png"),
 			DoCounterattack:               false,

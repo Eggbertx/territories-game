@@ -8,7 +8,6 @@ import (
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/mattn/go-sqlite3"
-	"github.com/rs/zerolog"
 )
 
 var (
@@ -56,38 +55,38 @@ func EnoughPlayersToStart(tx *sql.Tx) (bool, int, error) {
 }
 
 // ValidateUser checks if the user is registered in the game by querying the nations table
-func ValidateUser(user string, tdb *sql.DB, logger zerolog.Logger) error {
+func ValidateUser(user string, tdb *sql.DB, logger config.LoggerFunc) error {
 	if user == "" {
-		logger.Err(ErrMissingUser).Caller().Send()
+		logger("User is not registered in the game")
 		return ErrMissingUser
 	}
 
 	var countryName string
 	stmt, err := tdb.Prepare("SELECT country_name FROM nations WHERE player = ?")
 	if err != nil {
-		logger.Err(err).Caller().Msg("Unable to prepare user check statement")
+		logger("Unable to prepare user check statement: %w", err)
 		return err
 	}
 	defer stmt.Close()
 
 	if err = stmt.QueryRow(user).Scan(&countryName); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			logger.Err(ErrUserNotRegistered).Caller().Send()
+			logger("User is not registered in the game")
 			return ErrUserNotRegistered
 		}
-		logger.Err(err).Caller().Msg("Unable to check if user is registered")
+		logger("Unable to check if user is registered: %w", err)
 		return err
 	}
 
 	if err = stmt.Close(); err != nil {
-		logger.Err(err).Caller().Msg("Unable to close user check statement")
+		logger("Unable to close user check statement: %w", err)
 		return err
 	}
 	return nil
 }
 
 // PlayerHoldings returns the number of territories a player currently holds
-func PlayerHoldings(db *sql.DB, tx *sql.Tx, player string, logger zerolog.Logger) (int, error) {
+func PlayerHoldings(db *sql.DB, tx *sql.Tx, player string, logger config.LoggerFunc) (int, error) {
 	const territoriesLeftSQL = `SELECT COUNT(*) FROM v_nation_holdings WHERE player = ?`
 	var stmt *sql.Stmt
 	var err error
@@ -97,14 +96,14 @@ func PlayerHoldings(db *sql.DB, tx *sql.Tx, player string, logger zerolog.Logger
 		stmt, err = tx.Prepare(territoriesLeftSQL)
 	}
 	if err != nil {
-		logger.Err(err).Caller().Send()
+		logger("Unable to prepare player holdings statement: %w", err)
 		return 0, err
 	}
 	defer stmt.Close()
 
 	var count int
 	if err = stmt.QueryRow(player).Scan(&count); err != nil {
-		logger.Err(err).Caller().Msg("Unable to check if user has territories left")
+		logger("Unable to check if user has territories left: %w", err)
 		return 0, err
 	}
 	return count, nil
@@ -112,14 +111,18 @@ func PlayerHoldings(db *sql.DB, tx *sql.Tx, player string, logger zerolog.Logger
 
 // UpdateHoldingArmySize updates the army size of a holding in the database. If deleteNationIfNoTerritories is true and the size is 0,
 // it will remove the nation from play if it has no remaining territories.
-func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool, logger zerolog.Logger) (bool, error) {
+func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool) (bool, error) {
 	var stmt *sql.Stmt
 	var err error
 	shouldCommit := tx == nil
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return false, err
+	}
 	if tx == nil {
 		tx, err = db.Begin()
 		if err != nil {
-			logger.Err(err).Caller().Msg("Unable to begin transaction")
+			cfg.LogError("Unable to begin transaction", "error", err)
 			return false, err
 		}
 		defer tx.Rollback()
@@ -127,7 +130,7 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 
 	stmt, err = tx.Prepare("SELECT player FROM v_nation_holdings WHERE territory = ?")
 	if err != nil {
-		logger.Err(err).Caller().Msg("Unable to prepare get defending nation statement")
+		cfg.LogError("Unable to prepare get defending nation statement", "error", err)
 		return false, err
 	}
 	defer stmt.Close()
@@ -135,67 +138,66 @@ func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, d
 	if err = stmt.QueryRow(territory).Scan(&defendingNationPlayer); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = fmt.Errorf("no defending nation found for territory %s", territory)
-			logger.Err(err).Caller().Send()
 		}
-		logger.Err(err).Caller().Msg("Unable to get territory nation")
+		cfg.LogError("Unable to get territory nation", "error", err)
 		return false, err
 	}
 	if err = stmt.Close(); err != nil {
-		logger.Err(err).Caller().Msg("Unable to close get nation statement")
+		cfg.LogError("Unable to close get nation statement", "error", err)
 		return false, err
 	}
 
 	if size > 0 {
 		if stmt, err = tx.Prepare("UPDATE holdings SET army_size = ? WHERE territory = ?"); err != nil {
-			logger.Err(err).Caller().Msg("Unable to prepare update holding army size statement")
+			cfg.LogError("Unable to prepare update holding army size statement", "error", err)
 			return false, err
 		}
 		defer stmt.Close()
 		stmt.Exec(size, territory)
 	} else {
 		if stmt, err = tx.Prepare("DELETE FROM holdings WHERE territory = ?"); err != nil {
-			logger.Err(err).Caller().Msg("Unable to prepare delete holding statement")
+			cfg.LogError("Unable to prepare delete holding statement", "error", err)
 			return false, err
 		}
 		defer stmt.Close()
 		stmt.Exec(territory)
 	}
 	if err != nil {
-		logger.Err(err).Caller().Msg("Unable to update holding army size")
+		cfg.LogError("Unable to update holding army size", "error", err)
 	}
 	if err = stmt.Close(); err != nil {
-		logger.Err(err).Caller().Msg("Unable to close update holding statement")
+		cfg.LogError("Unable to close update holding statement", "error", err)
 		return false, err
 	}
 
 	var nationRemoved bool
 	if size == 0 && deleteNationIfNoTerritories {
-		territoryCount, err := PlayerHoldings(db, tx, defendingNationPlayer, logger)
+		territoryCount, err := PlayerHoldings(db, tx, defendingNationPlayer, cfg.LogError)
 		if err != nil {
 			return false, err
 		}
 		if territoryCount == 0 {
 			if stmt, err = tx.Prepare(`DELETE FROM nations WHERE player = ?`); err != nil {
-				logger.Err(err).Caller().Msg("Unable to prepare delete nation statement")
+				cfg.LogError("Unable to prepare delete nation statement", "error", err)
 				return false, err
 			}
 			defer stmt.Close()
 			if _, err = stmt.Exec(defendingNationPlayer); err != nil {
-				logger.Err(err).Caller().Msg("Unable to delete nation")
+				cfg.LogError("Unable to delete nation", "error", err)
 				return false, err
 			}
 			if err = stmt.Close(); err != nil {
-				logger.Err(err).Caller().Msg("Unable to close delete nation statement")
+				cfg.LogError("Unable to close delete nation statement", "error", err)
 				return false, err
 			}
-			logger.Info().Msgf("Player %s has no territories left, nation removed from play", defendingNationPlayer)
+			cfg.LogInfo("Player %s has no territories left, nation removed from play", defendingNationPlayer)
 			nationRemoved = true
 		}
 	}
 
 	if shouldCommit {
 		if err = tx.Commit(); err != nil {
-			logger.Err(err).Caller().Msg("Unable to commit transaction")
+			cfg.LogError("Unable to commit transaction", "error", err)
 			return false, err
 		}
 	}
