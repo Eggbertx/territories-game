@@ -144,11 +144,11 @@ var (
 				assert.NoError(t, err)
 
 				assert.False(t, cfg.DoCounterattack)
-				assert.Equal(t, 3, cfg.InitialArmies)
-				assert.Equal(t, 3, cfg.MinimumNationsToStart)
-				assert.Equal(t, 5, cfg.MaxArmiesPerTerritory)
+				assert.Equal(t, defaultInitialArmies, cfg.InitialArmies)
+				assert.Equal(t, defaultMinimumNationsToStart, cfg.MinimumNationsToStart)
+				assert.Equal(t, defaultMaxArmiesPerTerritory, cfg.MaxArmiesPerTerritory)
 				assert.False(t, cfg.UnclaimedTerritoriesHave1Army)
-				assert.Equal(t, 3.0, cfg.ActionsPerTurnHoldingsDivisor)
+				assert.Equal(t, defaultActionsPerTurnHoldingsDivisor, cfg.ActionsPerTurnHoldingsDivisor)
 				assert.True(t, cfg.TurnEndsWhenAllPlayersDone)
 				assert.Equal(t, time.Hour, cfg.turnDuration)
 			},

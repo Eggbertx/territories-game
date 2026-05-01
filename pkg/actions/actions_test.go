@@ -256,7 +256,8 @@ var (
 					DefendingTerritory: "CA",
 				},
 			},
-			expectError: true,
+			expectError:           true,
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
 				assert.ErrorContains(t, err, "unrecognized abbreviation, name, or alias")
 			},
@@ -275,7 +276,8 @@ var (
 					DefendingTerritory: "CA",
 				},
 			},
-			expectError: true,
+			expectError:           true,
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
 				assert.ErrorContains(t, err, "friendly fire not allowed")
 			},
@@ -356,7 +358,8 @@ var (
 					DefendingTerritory: "NV",
 				},
 			},
-			expectError: true,
+			expectError:           true,
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
 				assert.ErrorContains(t, err, "no armies in Nevada")
 			},
@@ -475,9 +478,13 @@ var (
 					Territory: "CA",
 				},
 			},
-			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
+			minimumPlayersToStart: 1,
+			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
+				if !assert.NoError(t, err) {
+					t.FailNow()
+				}
 				var armySize int
-				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
+				err = db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
 				if !assert.NoError(t, err) {
 					t.FailNow()
 				}
@@ -513,7 +520,8 @@ var (
 					Territory: "CA",
 				},
 			},
-			expectError: true,
+			expectError:           true,
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
 				assert.ErrorContains(t, err, "cannot raise army size in California: already at maximum of 5")
 				var armySize int
@@ -537,7 +545,8 @@ var (
 					Territory: "NV",
 				},
 			},
-			expectError: true,
+			expectError:           true,
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
 				assert.ErrorContains(t, err, "no armies in Nevada controlled by Test User to raise")
 				var armySize int
@@ -578,6 +587,7 @@ var (
 					Destination: "NV",
 				},
 			},
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
 				var armySize int
 				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
@@ -610,6 +620,7 @@ var (
 					Armies:      1,
 				},
 			},
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
 				var armySize int
 				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
@@ -681,6 +692,7 @@ var (
 					Destination: "NV",
 				},
 			},
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
 				var armySize int
 				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
@@ -715,6 +727,7 @@ var (
 					Destination: "NV",
 				},
 			},
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, db *sql.DB, _ error) {
 				var armySize int
 				err := db.QueryRow("SELECT army_size FROM v_nation_holdings WHERE territory = 'CA'").Scan(&armySize)
@@ -756,6 +769,7 @@ var (
 					Destination: "NV",
 				},
 			},
+			minimumPlayersToStart: 1,
 			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
 				if !assert.NoError(t, err) {
 					t.FailNow()

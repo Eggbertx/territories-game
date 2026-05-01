@@ -35,20 +35,23 @@ func (car *ColorActionResult) String() string {
 }
 
 type ColorAction struct {
-	User   string
-	Color  string
-	Logger config.LoggerFunc
+	User  string
+	Color string
 }
 
 func (ca *ColorAction) DoAction(tdb *sql.DB) (ActionResult, error) {
-	err := db.ValidateUser(ca.User, tdb, ca.Logger)
+	cfg, err := config.GetConfig()
 	if err != nil {
+		return nil, err
+	}
+
+	if err = db.ValidateUser(ca.User, tdb, cfg.LogError); err != nil {
 		return nil, err
 	}
 
 	parsedColor, err := csscolorparser.Parse(ca.Color)
 	if err != nil {
-		ca.Logger("Unable to parse color", "error", err)
+		cfg.LogError("Unable to parse color", "error", err)
 		return nil, err
 	}
 	parsedColor.A = 1.0 // Ensure the color is fully opaque
@@ -56,7 +59,7 @@ func (ca *ColorAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 
 	stmt, err := tdb.Prepare("UPDATE nations SET color = ? WHERE player = ?")
 	if err != nil {
-		ca.Logger("Unable to prepare color update statement", "error", err)
+		cfg.LogError("Unable to prepare color update statement", "error", err)
 		return nil, err
 	}
 	defer stmt.Close()
@@ -64,11 +67,11 @@ func (ca *ColorAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
 			err = db.ErrColorInUse
 		}
-		ca.Logger("Unable to update nation color", "error", err)
+		cfg.LogError("Unable to update nation color", "error", err)
 		return nil, err
 	}
 	if err = stmt.Close(); err != nil {
-		ca.Logger("Unable to close color update statement", "error", err)
+		cfg.LogError("Unable to close color update statement", "error", err)
 		return nil, err
 	}
 

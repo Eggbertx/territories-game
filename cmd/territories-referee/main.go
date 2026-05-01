@@ -71,9 +71,7 @@ func main() {
 
 	args := resolveArgs()
 
-	cfg := Config{
-		Config: config.DefaultConfig,
-	}
+	var cfg Config
 	cfgFile, err := os.Open("config.json")
 	if err != nil {
 		logger.Error("Unable to open file", "error", err)
@@ -94,7 +92,10 @@ func main() {
 	cfg.LogError = func(msg string, args ...interface{}) {
 		logger.Error(msg, args...)
 	}
-	config.SetConfig(&cfg.Config)
+	if err = config.SetConfig(&cfg.Config); err != nil {
+		logger.Error("Unable to set config", "error", err)
+		os.Exit(1)
+	}
 
 	if len(args) == 0 {
 		logger.Error("No action specified", "validActions", validActionTypes)

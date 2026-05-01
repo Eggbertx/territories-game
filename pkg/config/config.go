@@ -11,18 +11,16 @@ import (
 	"github.com/Eggbertx/durationutil"
 )
 
+const (
+	defaultMaxArmiesPerTerritory         = 5
+	defaultInitialArmies                 = 3
+	defaultMinimumNationsToStart         = 2
+	defaultActionsPerTurnHoldingsDivisor = 3.0
+)
+
 var (
 	cfg                  *Config
 	ErrGameNotConfigured = fmt.Errorf("no active configuration has been set")
-
-	DefaultConfig = Config{
-		MaxArmiesPerTerritory:         5,
-		InitialArmies:                 3,
-		MinimumNationsToStart:         2,
-		ActionsPerTurnHoldingsDivisor: 3,
-		LogInfo:                       noopLoggerFunc,
-		LogError:                      noopLoggerFunc,
-	}
 )
 
 func noopLoggerFunc(string, ...any) {}
@@ -36,12 +34,13 @@ type Config struct {
 	// DBFile is the path to the SQLite database file
 	DBFile string `json:"dbFile"`
 
+	// LogInfo is a function that can be used to send information level events to the log. It is assumed that it will treat arguments the
+	// same as they are treated by slog.Logger.Log
 	LogInfo LoggerFunc `json:"-"`
 
+	// LogError is a function that can be used to send error level events to the log. It is assumed that it will treat arguments the
+	// same as they are treated by slog.Logger.Log
 	LogError LoggerFunc `json:"-"`
-
-	// // PrintLogToConsole indicates whether logs should also be printed to the console in addition to the log file
-	// PrintLogToConsole bool `json:"printLogToConsole"`
 
 	// SVGOutFile is the path to the SVG output file with the current nations/players and territory holdings
 	SVGOutFile string `json:"svgOutFile"`
@@ -125,19 +124,19 @@ func (tc *Config) validateRequiredValues() error {
 		return &missingFieldError{"pngOutFile"}
 	}
 	if tc.MaxArmiesPerTerritory <= 0 {
-		tc.MaxArmiesPerTerritory = DefaultConfig.MaxArmiesPerTerritory
+		tc.MaxArmiesPerTerritory = defaultMaxArmiesPerTerritory
 	}
 	if tc.InitialArmies <= 0 {
-		tc.InitialArmies = DefaultConfig.InitialArmies
+		tc.InitialArmies = defaultInitialArmies
 	}
 	if tc.MinimumNationsToStart <= 0 {
-		tc.MinimumNationsToStart = DefaultConfig.MinimumNationsToStart
+		tc.MinimumNationsToStart = defaultMinimumNationsToStart
 	}
 	if len(tc.Territories) == 0 {
 		return fmt.Errorf("at least one territory is required")
 	}
 	if tc.ActionsPerTurnHoldingsDivisor <= 0 {
-		tc.ActionsPerTurnHoldingsDivisor = DefaultConfig.ActionsPerTurnHoldingsDivisor
+		tc.ActionsPerTurnHoldingsDivisor = defaultActionsPerTurnHoldingsDivisor
 	}
 	if tc.TurnDurationString != "" {
 		var err error
@@ -236,18 +235,21 @@ func validateConfig() (err error) {
 	return nil
 }
 
-func SetActiveConfig(c *Config) error {
+// SetConfig validates the incoming configuration struct, and if it passes validation, sets it as the active configuration.
+func SetConfig(c *Config) error {
+	if c == nil {
+		return ErrGameNotConfigured
+	}
 	cfg = c
 	err := validateConfig()
-	if err != nil {
-		cfg = nil
-	} else {
+	if err == nil {
 		if cfg.LogInfo == nil {
-			cfg.LogInfo = func(s string, a ...any) {}
+			cfg.LogInfo = noopLoggerFunc
 		}
 		if cfg.LogError == nil {
-			cfg.LogError = func(s string, a ...any) {}
+			cfg.LogError = noopLoggerFunc
 		}
+		*c = *cfg
 	}
 	return err
 }
@@ -271,26 +273,28 @@ func GetTestingConfig(t *testing.T) (*Config, error) {
 			DBFile:  path.Join(dir, "test.db"),
 
 			LogInfo: func(s string, a ...any) {
-				t.Logf(s, a)
+				t.Helper()
+				t.Log(append([]any{s}, a...)...)
 			},
 			LogError: func(s string, a ...any) {
-				t.Errorf(s, a)
+				t.Helper()
+				t.Log(append([]any{s}, a...)...)
 			},
 			SVGOutFile:                    path.Join(dir, "test.svg"),
 			PNGOutFile:                    path.Join(dir, "test.png"),
 			DoCounterattack:               false,
-			MaxArmiesPerTerritory:         5,
-			InitialArmies:                 3,
-			MinimumNationsToStart:         2,
-			ActionsPerTurnHoldingsDivisor: 3,
+			MaxArmiesPerTerritory:         defaultMaxArmiesPerTerritory,
+			InitialArmies:                 defaultInitialArmies,
+			MinimumNationsToStart:         defaultMinimumNationsToStart,
+			ActionsPerTurnHoldingsDivisor: defaultActionsPerTurnHoldingsDivisor,
 			DoTurnManagement:              true,
 			TurnEndsWhenAllPlayersDone:    true,
 			Territories: []Territory{
 				{Name: "California", Abbreviation: "CA", Neighbors: []string{"NV", "OR", "AZ"}},
-				{Name: "Nevada", Abbreviation: "NV", Neighbors: []string{"CA", "OR", "UT"}},
+				{Name: "Nevada", Abbreviation: "NV", Neighbors: []string{"CA", "OR", "UT", "AZ"}},
 				{Name: "Oregon", Abbreviation: "OR", Neighbors: []string{"CA", "NV"}},
 				{Name: "Arizona", Abbreviation: "AZ", Neighbors: []string{"CA", "NV"}},
-				{Name: "Utah", Abbreviation: "UT", Neighbors: []string{"NV", "AZ"}},
+				{Name: "Utah", Abbreviation: "UT", Neighbors: []string{"NV"}},
 			},
 		}
 	}
@@ -299,13 +303,6 @@ func GetTestingConfig(t *testing.T) (*Config, error) {
 
 func CloseTestingConfig(t *testing.T) {
 	cfg = nil
-}
-
-func SetConfig(c *Config) {
-	if c != nil {
-		c.turnDuration, _ = durationutil.ParseLongerDuration(c.TurnDurationString)
-		cfg = c
-	}
 }
 
 type Territory struct {
