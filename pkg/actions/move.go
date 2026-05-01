@@ -7,7 +7,6 @@ import (
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -63,65 +62,62 @@ type MoveAction struct {
 	Source      string
 	Destination string
 	Armies      int
-
-	Logger zerolog.Logger
 }
 
 func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	if ma.Source == "" {
-		ma.Logger.Err(ErrMissingSourceTerritory).Caller().Send()
+		cfg.LogError("No source territory specified")
 		return nil, ErrMissingSourceTerritory
 	}
 	if ma.Destination == "" {
-		ma.Logger.Err(ErrMissingDestTerritory).Caller().Send()
+		cfg.LogError("No destination territory specified")
 		return nil, ErrMissingDestTerritory
 	}
 	if ma.Source == ma.Destination {
-		ma.Logger.Err(ErrSourceEqualsDestination).Caller().Send()
+		cfg.LogError("Source and destination territories cannot be the same")
 		return nil, ErrSourceEqualsDestination
-	}
-
-	cfg, err := config.GetConfig()
-	if err != nil {
-		ma.Logger.Err(err).Caller().Msg("Unable to get configuration")
-		return nil, err
 	}
 
 	sourceTerritory, err := cfg.ResolveTerritory(ma.Source)
 	if err != nil {
-		ma.Logger.Err(err).Caller().Str("sourceTerritory", ma.Source).Send()
+		cfg.LogError("Unable to resolve source territory", "error", err)
 		return nil, err
 	}
 	destTerritory, err := cfg.ResolveTerritory(ma.Destination)
 	if err != nil {
-		ma.Logger.Err(err).Caller().Str("destinationTerritory", ma.Destination).Send()
+		cfg.LogError("Unable to resolve destination territory", "error", err)
 		return nil, err
 	}
 
 	isNeighboring, err := sourceTerritory.IsNeighboring(ma.Destination)
 	if err != nil {
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to check if territories are neighboring", "error", err)
 		return nil, err
 	}
 
 	if !isNeighboring {
 		err = fmt.Errorf("cannot move from %s to %s: not a neighboring territory", sourceTerritory.Name, destTerritory.Name)
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}
 
 	tx, err := tdb.Begin()
 	if err != nil {
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to begin transaction", "error", err)
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	if err = checkIfEnoughPlayersToStart(tx, cfg, ma.Logger); err != nil {
+	if err = checkIfEnoughPlayersToStart(tx, cfg, cfg.LogError); err != nil {
 		return nil, err
 	}
 
-	if err = checkReturnsRemainingIfManaging(tx, ma.User, cfg, ma.Logger); err != nil {
+	if err = checkReturnsRemainingIfManaging(tx, ma.User, cfg, cfg.LogError); err != nil {
 		return nil, err
 	}
 
@@ -130,7 +126,7 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	const moveSQL = "SELECT army_size, player FROM v_nation_holdings WHERE territory = ?"
 	stmt, err := tx.Prepare(moveSQL)
 	if err != nil {
-		ma.Logger.Err(err).Caller().Msg("Unable to prepare move query")
+		cfg.LogError("Unable to prepare move query", "error", err)
 		return nil, err
 	}
 	defer stmt.Close()
@@ -139,13 +135,13 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = fmt.Errorf("no armies in %s controlled by %s to move", sourceTerritory.Name, ma.User)
 		}
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to query source territory", "error", err)
 		return nil, err
 	}
 
 	if ma.Armies > 0 && ma.Armies > armiesInSourceTerritory {
 		err = fmt.Errorf("cannot move %d armies from %s: only %d available", ma.Armies, sourceTerritory.Name, armiesInSourceTerritory)
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}
 	if ma.Armies <= 0 {
@@ -154,25 +150,25 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 
 	err = stmt.QueryRow(destTerritory.Abbreviation).Scan(&armiesInDestTerritory, &destinationPlayer)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to query destination territory", "error", err)
 		return nil, err
 	}
 
 	if fromPlayer != ma.User {
 		err = fmt.Errorf("cannot move from %s: no armies controlled by player", sourceTerritory.Name)
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}
 
 	if armiesInDestTerritory > 0 && destinationPlayer != ma.User {
 		err = ErrTerritoryAlreadyOccupied
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Territory already occupied", "error", err)
 		return nil, err
 	}
 
 	if armiesInDestTerritory+ma.Armies > cfg.MaxArmiesPerTerritory {
 		err = fmt.Errorf("cannot move %d armies to %s: would exceed maximum of %d", ma.Armies, destTerritory.Name, cfg.MaxArmiesPerTerritory)
-		ma.Logger.Err(err).Caller().Send()
+		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}
 
@@ -180,7 +176,7 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	if armiesInDestTerritory == 0 && cfg.UnclaimedTerritoriesHave1Army {
 		_, losses, err := attackCalculation(ma.Armies, 1)
 		if err != nil {
-			ma.Logger.Err(err).Caller().Send()
+			cfg.LogError("Unable to calculate attack", "error", err)
 			return nil, err
 		}
 		if losses < 0 {
@@ -199,33 +195,34 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 			(SELECT id FROM nations WHERE player = ?),
 			?, ?)`)
 		if err != nil {
-			ma.Logger.Err(err).Caller().Msg("Unable to prepare insert holding statement")
+			cfg.LogError("Unable to prepare insert holding statement", "error", err)
 			return nil, err
 		}
 		defer stmt.Close()
 		if _, err = stmt.Exec(ma.User, destTerritory.Abbreviation, newDestinationArmies); err != nil {
-			ma.Logger.Err(err).Caller().Msg("Unable to insert new holding")
+			cfg.LogError("Unable to insert new holding", "error", err)
 			return nil, err
 		}
 	} else if newDestinationArmies > 0 {
 		// player is joining armies into an existing holding, update the army size
-		if _, err = db.UpdateHoldingArmySize(tdb, tx, destTerritory.Abbreviation, newDestinationArmies, false, ma.Logger); err != nil {
+		if _, err = db.UpdateHoldingArmySize(tdb, tx, destTerritory.Abbreviation, newDestinationArmies, false); err != nil {
+			cfg.LogError("Unable to update holding army size", "error", err)
 			return nil, err
 		}
 	}
 
 	// remove armies from source territory, if they lost armies in the attack and have no armies left, delete the holding
 	var nationRemoved bool
-	if nationRemoved, err = db.UpdateHoldingArmySize(tdb, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-ma.Armies, true, ma.Logger); err != nil {
+	if nationRemoved, err = db.UpdateHoldingArmySize(tdb, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-ma.Armies, true); err != nil {
 		return nil, err
 	}
 
-	if err = addTurnEntryIfManaging(tx, ma.User, "move", cfg, ma.Logger); err != nil {
+	if err = addTurnEntryIfManaging(tx, ma.User, "move"); err != nil {
 		return nil, err
 	}
 
 	if err = tx.Commit(); err != nil {
-		ma.Logger.Err(err).Caller().Msg("Unable to commit transaction")
+		cfg.LogError("Unable to commit transaction", "error", err)
 		return nil, err
 	}
 	return &MoveActionResult{
