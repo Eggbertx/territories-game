@@ -70,10 +70,10 @@ func main() {
 	}
 
 	args := resolveArgs()
-	env := os.Environ()
-	fmt.Println(env)
 
-	var cfg Config
+	cfg := Config{
+		Config: config.DefaultConfig,
+	}
 	cfgFile, err := os.Open("config.json")
 	if err != nil {
 		logger.Error("Unable to open file", "error", err)

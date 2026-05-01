@@ -14,7 +14,18 @@ import (
 var (
 	cfg                  *Config
 	ErrGameNotConfigured = fmt.Errorf("no active configuration has been set")
+
+	DefaultConfig = Config{
+		MaxArmiesPerTerritory:         5,
+		InitialArmies:                 3,
+		MinimumNationsToStart:         2,
+		ActionsPerTurnHoldingsDivisor: 3,
+		LogInfo:                       noopLoggerFunc,
+		LogError:                      noopLoggerFunc,
+	}
 )
+
+func noopLoggerFunc(string, ...any) {}
 
 type LoggerFunc func(string, ...any)
 
@@ -114,19 +125,19 @@ func (tc *Config) validateRequiredValues() error {
 		return &missingFieldError{"pngOutFile"}
 	}
 	if tc.MaxArmiesPerTerritory <= 0 {
-		tc.MaxArmiesPerTerritory = 5
+		tc.MaxArmiesPerTerritory = DefaultConfig.MaxArmiesPerTerritory
 	}
 	if tc.InitialArmies <= 0 {
-		tc.InitialArmies = 3
+		tc.InitialArmies = DefaultConfig.InitialArmies
 	}
 	if tc.MinimumNationsToStart <= 0 {
-		tc.MinimumNationsToStart = 3
+		tc.MinimumNationsToStart = DefaultConfig.MinimumNationsToStart
 	}
 	if len(tc.Territories) == 0 {
 		return fmt.Errorf("at least one territory is required")
 	}
 	if tc.ActionsPerTurnHoldingsDivisor <= 0 {
-		tc.ActionsPerTurnHoldingsDivisor = 3
+		tc.ActionsPerTurnHoldingsDivisor = DefaultConfig.ActionsPerTurnHoldingsDivisor
 	}
 	if tc.TurnDurationString != "" {
 		var err error
