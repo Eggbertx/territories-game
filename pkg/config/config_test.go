@@ -126,7 +126,8 @@ var (
 			},
 			expectError: true,
 			validateFunc: func(t *testing.T, _ *Config, err error) {
-				assert.ErrorIs(t, err, durationutil.ErrInvalidDurationString)
+				var expectError *durationutil.InvalidDurationStringError
+				assert.ErrorAs(t, err, &expectError)
 			},
 		},
 		{
