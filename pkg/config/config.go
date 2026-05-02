@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Eggbertx/durationutil"
 )
@@ -74,7 +73,7 @@ type Config struct {
 
 	// TurnDurationString determines how long a turn lasts before it ends, if it is a zero value, the turn only ends when all players are done.
 	// It is expected to be a valid duration string parseable by `durationutil.ParseLongerDuration`
-	TurnDurationString string `json:"turnDuration,omitempty"`
+	TurnDuration durationutil.ExtendedDuration `json:"turnDuration,omitempty"`
 
 	// DoTurnManagement indicates whether turn management should be handled internally. If it is false, it is assumed that the consuming
 	// application will handle turn management, such as by using a timer or a game loop. Default is true.
@@ -82,8 +81,6 @@ type Config struct {
 
 	// Territories is the list of valid territories that can be owned by players
 	Territories []Territory `json:"territories"`
-
-	turnDuration time.Duration
 }
 
 func (tc *Config) ResolveTerritory(query string) (*Territory, error) {
@@ -104,10 +101,6 @@ func (tc *Config) ResolveTerritory(query string) (*Territory, error) {
 		}
 	}
 	return nil, fmt.Errorf("unrecognized abbreviation, name, or alias %q", query)
-}
-
-func (tc *Config) TurnDuration() time.Duration {
-	return tc.turnDuration
 }
 
 func (tc *Config) validateRequiredValues() error {
@@ -138,13 +131,8 @@ func (tc *Config) validateRequiredValues() error {
 	if tc.ActionsPerTurnHoldingsDivisor <= 0 {
 		tc.ActionsPerTurnHoldingsDivisor = defaultActionsPerTurnHoldingsDivisor
 	}
-	if tc.TurnDurationString != "" {
-		var err error
-		if tc.turnDuration, err = durationutil.ParseLongerDuration(tc.TurnDurationString); err != nil {
-			return fmt.Errorf("failed to parse turnDuration: %w", err)
-		}
-	}
-	if !tc.TurnEndsWhenAllPlayersDone && tc.turnDuration == 0 {
+
+	if !tc.TurnEndsWhenAllPlayersDone && tc.TurnDuration == 0 {
 		return fmt.Errorf("turnDuration must be set if turnEndsWhenAllPlayersDone is false")
 	}
 

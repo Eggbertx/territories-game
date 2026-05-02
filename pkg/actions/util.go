@@ -65,8 +65,7 @@ func checkReturnsRemainingIfManaging(tx *sql.Tx, user string, cfg *config.Config
 			return err
 		}
 		if actionsRemaining < 1 {
-			dur := cfg.TurnDuration()
-			if dur <= 0 {
+			if cfg.TurnDuration <= 0 {
 				err = fmt.Errorf("no actions remaining for player %s", user)
 				logger("Out of actions", "player", user, "error", err)
 				return err

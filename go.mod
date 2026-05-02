@@ -3,7 +3,7 @@ module github.com/Eggbertx/territories-game
 go 1.26.2
 
 require (
-	github.com/Eggbertx/durationutil v1.1.0
+	github.com/Eggbertx/durationutil v1.1.1
 	github.com/antchfx/xmlquery v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/mazznoer/csscolorparser v0.1.8

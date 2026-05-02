@@ -166,7 +166,7 @@ func TestAreAllPlayersFinished(t *testing.T) {
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
-	cfg.TurnDurationString = "" // disable turn duration to prevent time spent stepping through code from causing turns to end
+	cfg.TurnDuration = 0 // disable turn duration to prevent time spent stepping through code from causing turns to end
 	config.SetConfig(cfg)
 
 	t.Run("with transaction", func(t *testing.T) {

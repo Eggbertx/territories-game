@@ -137,8 +137,7 @@ func HasTurnDurationExpired(tx *sql.Tx) (bool, error) {
 		return false, err
 	}
 
-	turnDuration := cfg.TurnDuration()
-	if turnDuration <= 0 {
+	if cfg.TurnDuration <= 0 {
 		return false, nil // turns have no time limit if turnDuration is unset or empty
 	}
 
@@ -172,7 +171,7 @@ func HasTurnDurationExpired(tx *sql.Tx) (bool, error) {
 		}
 	}
 
-	expired := lastTurnEndTimestamp.Time.Add(turnDuration).Before(time.Now())
+	expired := lastTurnEndTimestamp.Time.Add(time.Duration(cfg.TurnDuration)).Before(time.Now())
 	if !expired {
 		return false, nil
 	}
@@ -197,7 +196,7 @@ func IsTurnDone(tx *sql.Tx) (bool, error) {
 		}
 		shouldEndTurn = len(playerActions) == 0
 	}
-	if !shouldEndTurn && cfg.TurnDuration() > 0 {
+	if !shouldEndTurn && cfg.TurnDuration > 0 {
 		if shouldEndTurn, err = HasTurnDurationExpired(tx); err != nil {
 			return false, err
 		}

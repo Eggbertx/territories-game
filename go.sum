@@ -1,5 +1,7 @@
 github.com/Eggbertx/durationutil v1.1.0 h1:bu4wRQziVU/rDoG3kT3L4NNQ32M8ZVA1F7fher1T6eQ=
 github.com/Eggbertx/durationutil v1.1.0/go.mod h1:YNRCPBUMAFNOQ9T0L7IvOZbm7LkS4b/cVfaPvozoq14=
+github.com/Eggbertx/durationutil v1.1.1 h1:yWA9+MLp2J0SghDJSNZzjndlpj+Q6pCpLHCPrsZImp8=
+github.com/Eggbertx/durationutil v1.1.1/go.mod h1:YNRCPBUMAFNOQ9T0L7IvOZbm7LkS4b/cVfaPvozoq14=
 github.com/antchfx/xmlquery v1.5.1 h1:T9I4Ns1EXiWHy0IqKupGhnfTQtJwlGrpXtauYOoNv78=
 github.com/antchfx/xmlquery v1.5.1/go.mod h1:bVqnl7TaDXSReKINrhZz+2E/PbCu2tUahb+wZ7WZNT8=
 github.com/antchfx/xpath v1.3.6 h1:s0y+ElRRtTQdfHP609qFu0+c6bglDv20pqOViQjjdPI=

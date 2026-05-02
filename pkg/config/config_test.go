@@ -115,22 +115,6 @@ var (
 			},
 		},
 		{
-			desc: "invalid turnDuration format",
-			cfg: &Config{
-				MapFile:            "map.svg",
-				DBFile:             "territories.db",
-				SVGOutFile:         "output.svg",
-				PNGOutFile:         "output.png",
-				Territories:        dummyTerritories,
-				TurnDurationString: "lol",
-			},
-			expectError: true,
-			validateFunc: func(t *testing.T, _ *Config, err error) {
-				var expectError *durationutil.InvalidDurationStringError
-				assert.ErrorAs(t, err, &expectError)
-			},
-		},
-		{
 			desc: "valid configuration, optional fields set",
 			cfg: &Config{
 				MapFile:                    "map.svg",
@@ -139,7 +123,7 @@ var (
 				PNGOutFile:                 "output.png",
 				Territories:                dummyTerritories,
 				TurnEndsWhenAllPlayersDone: true,
-				TurnDurationString:         "1h",
+				TurnDuration:               1 * durationutil.ExtendedDuration(time.Hour),
 			},
 			validateFunc: func(t *testing.T, cfg *Config, err error) {
 				assert.NoError(t, err)
@@ -151,7 +135,7 @@ var (
 				assert.False(t, cfg.UnclaimedTerritoriesHave1Army)
 				assert.Equal(t, defaultActionsPerTurnHoldingsDivisor, cfg.ActionsPerTurnHoldingsDivisor)
 				assert.True(t, cfg.TurnEndsWhenAllPlayersDone)
-				assert.Equal(t, time.Hour, cfg.turnDuration)
+				assert.Equal(t, time.Hour, time.Duration(cfg.TurnDuration))
 			},
 		},
 	}
