@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	attackActionStalemateFmt = "%s attacked %s from %s, attack failed (rolled %d) but no armies were lost"
-	attackActionSuccessFmt   = "%s attacked %s from %s, attack succeeded (rolled %d) and %d defending armies were lost"
-	attackActionFailureFmt   = "%s attacked %s from %s, attack failed (rolled %d) and %d attacking armies were lost"
+	attackActionFailureFmt                = "%s attacked %s from %s, attack failed (rolled %d) and %d attacking armies were lost"
+	attackActionStalemateFmt              = "%s attacked %s from %s, attack failed (rolled %d) but no armies were lost"
+	attackActionSuccessFmt                = "%s attacked %s from %s, attack succeeded (rolled %d) and %d defending armies were lost"
+	attackActionSuccessDefenderRemovedFmt = "%s attacked %s from %s, attack succeeded (rolled %d) and all defending armies were lost, %s has been removed from the game"
 )
 
 type AttackActionResult struct {
@@ -22,7 +23,7 @@ type AttackActionResult struct {
 	Attacking     int
 	Defending     int
 	Losses        int
-	NationRemoved bool
+	NationRemoved *db.Nation
 }
 
 func (aar *AttackActionResult) ActionType() string {
@@ -42,6 +43,9 @@ func (aar *AttackActionResult) String() string {
 		return fmt.Sprintf(attackActionStalemateFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.DieRoll)
 	}
 	if aar.Losses > 0 {
+		if aar.NationRemoved != nil && aar.NationRemoved.Player != "" {
+			return fmt.Sprintf(attackActionSuccessDefenderRemovedFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.DieRoll, aar.NationRemoved.CountryName)
+		}
 		return fmt.Sprintf(attackActionSuccessFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.DieRoll, aar.Losses)
 	}
 	return fmt.Sprintf(attackActionFailureFmt, action.User, action.DefendingTerritory, action.AttackingTerritory, aar.DieRoll, -aar.Losses)
@@ -99,14 +103,37 @@ func (aa *AttackAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		cfg.LogError("cannot attack territory (not neighboring)", "defending", defendingTerritory.Name, "attacking", attackingTerritory.Name)
 		return nil, err
 	}
+	tx, err := tdb.Begin()
+	if err != nil {
+		cfg.LogError("Unable to begin transaction", "error", err)
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var res ActionResult
 
 	if cfg.DoCounterattack {
-		return aa.doAttackWithCounter(tdb, attackingTerritory, defendingTerritory)
+		res, err = aa.doAttackWithCounter(tdb, tx, attackingTerritory, defendingTerritory)
+	} else {
+		res, err = aa.doNormalAttack(tdb, tx, attackingTerritory, defendingTerritory)
 	}
-	return aa.doNormalAttack(tdb, attackingTerritory, defendingTerritory)
+	if err != nil {
+		cfg.LogError("Attack action failed", "error", err)
+		return nil, err
+	}
+
+	if err = addTurnEntryIfManaging(tx, aa.User, "attack"); err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		cfg.LogError("Unable to commit transaction", "error", err)
+		return nil, err
+	}
+	return res, nil
 }
 
-func (aa *AttackAction) doNormalAttack(tdb *sql.DB, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {
+func (aa *AttackAction) doNormalAttack(tdb *sql.DB, tx *sql.Tx, attackingTerritory, defendingTerritory *config.Territory) (ActionResult, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return nil, err
@@ -114,7 +141,7 @@ func (aa *AttackAction) doNormalAttack(tdb *sql.DB, attackingTerritory, defendin
 
 	var attacking, defending int
 	const attackSQL = `SELECT army_size FROM v_nation_holdings WHERE territory = ?`
-	stmt, err := tdb.Prepare(attackSQL + "  AND player = ?")
+	stmt, err := tx.Prepare(attackSQL + "  AND player = ?")
 	if err != nil {
 		cfg.LogError("Unable to prepare attack query", "error", err)
 		return nil, err
@@ -137,7 +164,7 @@ func (aa *AttackAction) doNormalAttack(tdb *sql.DB, attackingTerritory, defendin
 		return nil, err
 	}
 
-	stmt, err = tdb.Prepare(attackSQL)
+	stmt, err = tx.Prepare(attackSQL)
 	if err != nil {
 		cfg.LogError("Unable to prepare defending query", "error", err)
 		return nil, err
@@ -162,15 +189,15 @@ func (aa *AttackAction) doNormalAttack(tdb *sql.DB, attackingTerritory, defendin
 	}
 
 	var attackerLosses, defenderLosses int
-	var nationRemoved bool
+	var nationRemoved *db.Nation
 	if losses > 0 {
 		// defending armies destroyed
 		defenderLosses = int(math.Min(losses, float64(defending)))
-		nationRemoved, err = db.UpdateHoldingArmySize(tdb, nil, defendingTerritory.Abbreviation, defending-defenderLosses, true)
+		nationRemoved, err = db.UpdateHoldingArmySize(tdb, tx, defendingTerritory.Abbreviation, defending-defenderLosses, true)
 	} else {
 		// attacking armies destroyed
 		attackerLosses = int(math.Min(math.Abs(losses), float64(attacking)))
-		nationRemoved, err = db.UpdateHoldingArmySize(tdb, nil, attackingTerritory.Abbreviation, attacking-attackerLosses, true)
+		nationRemoved, err = db.UpdateHoldingArmySize(tdb, tx, attackingTerritory.Abbreviation, attacking-attackerLosses, true)
 	}
 	if err != nil {
 		cfg.LogError("Unable to update holding army size", "error", err)
@@ -186,7 +213,7 @@ func (aa *AttackAction) doNormalAttack(tdb *sql.DB, attackingTerritory, defendin
 	}, nil
 }
 
-func (aa *AttackAction) doAttackWithCounter(_ *sql.DB, _, _ *config.Territory) (ActionResult, error) {
+func (aa *AttackAction) doAttackWithCounter(_ *sql.DB, _ *sql.Tx, _, _ *config.Territory) (ActionResult, error) {
 	// Placeholder for Advance Wars-style attack logic
 	return nil, errors.New("counterattack logic not implemented yet")
 }

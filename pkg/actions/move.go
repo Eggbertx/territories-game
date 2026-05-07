@@ -26,7 +26,7 @@ var (
 type MoveActionResult struct {
 	actionResultBase[*MoveAction]
 	FailedMove    bool
-	NationRemoved bool
+	NationRemoved *db.Nation
 }
 
 func (mar *MoveActionResult) ActionType() string {
@@ -46,7 +46,7 @@ func (mar *MoveActionResult) String() string {
 		return fmt.Sprintf(moveAllArmiesResultFmt, action.User, action.Source, action.Destination)
 	}
 
-	if mar.NationRemoved {
+	if mar.NationRemoved != nil {
 		return fmt.Sprintf(moveFailedNationRemoved, action.User, action.Destination, action.User)
 	}
 
@@ -212,8 +212,8 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 
 	// remove armies from source territory, if they lost armies in the attack and have no armies left, delete the holding
-	var nationRemoved bool
-	if nationRemoved, err = db.UpdateHoldingArmySize(tdb, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-ma.Armies, true); err != nil {
+	nationRemoved, err := db.UpdateHoldingArmySize(tdb, tx, sourceTerritory.Abbreviation, armiesInSourceTerritory-ma.Armies, true)
+	if err != nil {
 		return nil, err
 	}
 

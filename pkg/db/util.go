@@ -111,98 +111,101 @@ func PlayerHoldings(db *sql.DB, tx *sql.Tx, player string, logger config.LoggerF
 
 // UpdateHoldingArmySize updates the army size of a holding in the database. If deleteNationIfNoTerritories is true and the size is 0,
 // it will remove the nation from play if it has no remaining territories.
-func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool) (bool, error) {
+func UpdateHoldingArmySize(db *sql.DB, tx *sql.Tx, territory string, size int, deleteNationIfNoTerritories bool) (*Nation, error) {
 	var stmt *sql.Stmt
 	var err error
 	shouldCommit := tx == nil
 	cfg, err := config.GetConfig()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if tx == nil {
 		tx, err = db.Begin()
 		if err != nil {
 			cfg.LogError("Unable to begin transaction", "error", err)
-			return false, err
+			return nil, err
 		}
 		defer tx.Rollback()
 	}
 
-	stmt, err = tx.Prepare("SELECT player FROM v_nation_holdings WHERE territory = ?")
+	stmt, err = tx.Prepare("SELECT country_name, player FROM v_nation_holdings WHERE territory = ?")
 	if err != nil {
 		cfg.LogError("Unable to prepare get defending nation statement", "error", err)
-		return false, err
+		return nil, err
 	}
 	defer stmt.Close()
-	var defendingNationPlayer string
-	if err = stmt.QueryRow(territory).Scan(&defendingNationPlayer); err != nil {
+	var nationRemoved Nation
+	if err = stmt.QueryRow(territory).Scan(&nationRemoved.CountryName, &nationRemoved.Player); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			err = fmt.Errorf("no defending nation found for territory %s", territory)
 		}
 		cfg.LogError("Unable to get territory nation", "error", err)
-		return false, err
+		return nil, err
 	}
 	if err = stmt.Close(); err != nil {
 		cfg.LogError("Unable to close get nation statement", "error", err)
-		return false, err
+		return nil, err
 	}
 
 	if size > 0 {
 		if stmt, err = tx.Prepare("UPDATE holdings SET army_size = ? WHERE territory = ?"); err != nil {
 			cfg.LogError("Unable to prepare update holding army size statement", "error", err)
-			return false, err
+			return nil, err
 		}
 		defer stmt.Close()
-		stmt.Exec(size, territory)
+		_, err = stmt.Exec(size, territory)
 	} else {
 		if stmt, err = tx.Prepare("DELETE FROM holdings WHERE territory = ?"); err != nil {
 			cfg.LogError("Unable to prepare delete holding statement", "error", err)
-			return false, err
+			return nil, err
 		}
 		defer stmt.Close()
-		stmt.Exec(territory)
+		_, err = stmt.Exec(territory)
 	}
 	if err != nil {
 		cfg.LogError("Unable to update holding army size", "error", err)
 	}
 	if err = stmt.Close(); err != nil {
 		cfg.LogError("Unable to close update holding statement", "error", err)
-		return false, err
+		return nil, err
 	}
 
-	var nationRemoved bool
-	if size == 0 && deleteNationIfNoTerritories {
-		territoryCount, err := PlayerHoldings(db, tx, defendingNationPlayer, cfg.LogError)
+	var wasNationRemoved bool
+	if size <= 0 && deleteNationIfNoTerritories {
+		territoryCount, err := PlayerHoldings(db, tx, nationRemoved.Player, cfg.LogError)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if territoryCount == 0 {
 			if stmt, err = tx.Prepare(`DELETE FROM nations WHERE player = ?`); err != nil {
 				cfg.LogError("Unable to prepare delete nation statement", "error", err)
-				return false, err
+				return nil, err
 			}
 			defer stmt.Close()
-			if _, err = stmt.Exec(defendingNationPlayer); err != nil {
+			if _, err = stmt.Exec(nationRemoved.Player); err != nil {
 				cfg.LogError("Unable to delete nation", "error", err)
-				return false, err
+				return nil, err
 			}
 			if err = stmt.Close(); err != nil {
 				cfg.LogError("Unable to close delete nation statement", "error", err)
-				return false, err
+				return nil, err
 			}
-			cfg.LogInfo("Player %s has no territories left, nation removed from play", defendingNationPlayer)
-			nationRemoved = true
+			// cfg.LogInfo(fmt.Sprintf("Player %s has no territories left, nation removed from play", nationRemoved.Player), "player", nationRemoved.Player)
+			wasNationRemoved = true
 		}
 	}
 
 	if shouldCommit {
 		if err = tx.Commit(); err != nil {
 			cfg.LogError("Unable to commit transaction", "error", err)
-			return false, err
+			return nil, err
 		}
 	}
 
-	return nationRemoved, err
+	if wasNationRemoved {
+		return &nationRemoved, err
+	}
+	return nil, err
 }
 
 // SQLite3Timestamp is used to represent timestamps in SQLite3 format that may scan into a time.Time, or a
@@ -250,4 +253,10 @@ func (t *SQLite3Timestamp) parseSQLite3Timestamp(ts string) (err error) {
 	}
 
 	return &time.ParseError{Value: ts, Message: ": invalid sqlite3 timestamp"}
+}
+
+type Nation struct {
+	CountryName string
+	Player      string
+	Color       string
 }
