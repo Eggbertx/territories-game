@@ -52,6 +52,9 @@ Argument      | Description
 `attacking`   | The territory whose armies are attacking. This must be a valid territory in the map and configuration file, and must have at least one army that is the player's.
 `destination` | The territory being attacked. This must be a valid territory in the map and configuration file that neighbors the source territory, and must have an army that is not the player's. If the attack is successful, the defending armies will be reduced, and if all defending armies are defeated, the territory will no longer be claimed.
 
+## Errors
+In consuming applications, if an error returned by `action.DoAction()` is of type `*actions.ActionError`, it is considered to be noncritical, comparable to a 4xx HTTP response status code as opposed to a 5xx status.
+
 # Combat
 Battle calculations are calculated taking into consideration the number of attacking vs defending armies, with some randomness. If all defending armies in the territory are defeated, the territory is no longer claimed, and can be moved into.
 

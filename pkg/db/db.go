@@ -2,10 +2,12 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"net"
 	"strings"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
+	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
 
 	_ "embed"
@@ -71,6 +73,12 @@ func ErrorIsMissingSQLFunction(err error) bool {
 		return false
 	}
 	return strings.HasPrefix(err.Error(), "no such function: ")
+}
+
+// ErrorIsUniqueConstraintViolation returns true if the given error was caused by inserting a duplicate value into a column with a unique constraint
+func ErrorIsUniqueConstraintViolation(err error) bool {
+	sqlErr, ok := err.(sqlite3.Error)
+	return ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique)
 }
 
 func CloseDB() error {

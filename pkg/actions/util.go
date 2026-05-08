@@ -2,6 +2,7 @@ package actions
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -41,7 +42,9 @@ func checkIfEnoughPlayersToStart(tx *sql.Tx, cfg *config.Config, logger config.L
 	}
 
 	if !enough {
-		err = fmt.Errorf("not enough players to start the game, minimum required: %d, currently joined: %d", cfg.MinimumNationsToStart, numPlayers)
+		err = &ActionError{
+			msg: fmt.Sprintf("not enough players to start the game, minimum required: %d, currently joined: %d", cfg.MinimumNationsToStart, numPlayers),
+		}
 		logger("Not enough players to start the game", "minimumRequired", cfg.MinimumNationsToStart, "currentlyJoined", numPlayers, "error", err)
 		return err
 	}
@@ -66,7 +69,9 @@ func checkReturnsRemainingIfManaging(tx *sql.Tx, user string, cfg *config.Config
 		}
 		if actionsRemaining < 1 {
 			if cfg.TurnDuration <= 0 {
-				err = fmt.Errorf("no actions remaining for player %s", user)
+				err = &ActionError{
+					msg: fmt.Sprintf("no actions remaining for player %s", user),
+				}
 				logger("Out of actions", "player", user, "error", err)
 				return err
 			}
@@ -78,7 +83,9 @@ func checkReturnsRemainingIfManaging(tx *sql.Tx, user string, cfg *config.Config
 				return err
 			}
 			if !shouldEndTurn {
-				err = fmt.Errorf("no actions remaining for player %s", user)
+				err = &ActionError{
+					msg: fmt.Sprintf("no actions remaining for player %s", user),
+				}
 				logger("Out of actions", "player", user, "error", err)
 				return err
 			}
@@ -100,4 +107,25 @@ func addTurnEntryIfManaging(tx *sql.Tx, user string, actionType string) error {
 		}
 	}
 	return nil
+}
+
+// ActionError represents a non-critical error (e.g., not enough players to start, out of turns, invalid territory/action, etc)
+type ActionError struct {
+	msg string
+	err error
+}
+
+func (e *ActionError) Error() string {
+	if e.err != nil {
+		return e.err.Error()
+	}
+	return e.msg
+}
+
+func (e *ActionError) Unwrap() error {
+	return e.err
+}
+
+func (e *ActionError) As(target any) bool {
+	return errors.As(e.err, target)
 }

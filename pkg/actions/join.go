@@ -2,12 +2,10 @@ package actions
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
-	"github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -46,6 +44,11 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
+	if ja.User == "" {
+		cfg.LogError("No user specified")
+		return nil, &ActionError{err: db.ErrMissingUser}
+	}
+
 	if ja.Nation == "" {
 		ja.Nation = fmt.Sprintf("%s's Nation", ja.User)
 	}
@@ -56,7 +59,7 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	joinTerritory, err := cfg.ResolveTerritory(ja.Territory)
 	if err != nil {
 		cfg.LogError("Unable to resolve territory", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 
 	tx, err := tdb.Begin()
@@ -80,7 +83,7 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 	if numPlayerMatches > 0 {
 		cfg.LogError("Player has already joined a nation")
-		return nil, db.ErrPlayerAlreadyJoined
+		return nil, &ActionError{err: db.ErrPlayerAlreadyJoined}
 	}
 
 	if err = tx.QueryRow(nationAlreadyJoinedSQL, ja.Nation).Scan(&numNationMatches); err != nil {
@@ -89,7 +92,7 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 	if numNationMatches > 0 {
 		cfg.LogError("Nation with the given name already exists")
-		return nil, db.ErrNationAlreadyJoined
+		return nil, &ActionError{err: db.ErrNationAlreadyJoined}
 	}
 
 	if _, err = tx.Exec(nationAddSQL, ja.Nation, ja.User, randomColor()); err != nil {
@@ -97,7 +100,7 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 	if _, err = tx.Exec(nationInitialHolding, ja.Nation, joinTerritory.Abbreviation, cfg.InitialArmies); err != nil {
-		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
+		if db.ErrorIsUniqueConstraintViolation(err) {
 			err = ErrTerritoryAlreadyOccupied
 		}
 		cfg.LogError("Unable to add initial holding", "error", err)

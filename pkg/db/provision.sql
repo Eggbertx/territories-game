@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS nations (
 	id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
 	country_name VARCHAR(125) NOT NULL,
 	player VARCHAR(90) NOT NULL,
-	color CHAR(6) NOT NULL,
+	color CHAR(25) NOT NULL,
 	CONSTRAINT country_name_length CHECK(LENGTH(country_name) > 0),
 	CONSTRAINT player_length CHECK(LENGTH(player) > 0),
 	CONSTRAINT unique_country_name UNIQUE(country_name)
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS nations (
 
 CREATE TABLE IF NOT EXISTS holdings (
 	id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-	territory VARCHAR(10) NOT NULL UNIQUE,
+	territory VARCHAR(45) NOT NULL UNIQUE,
 	nation_id INTEGER NOT NULL,
 	army_size INTEGER NOT NULL CHECK(army_size > 0),
 

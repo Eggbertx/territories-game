@@ -64,6 +64,14 @@ func (aa *AttackAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 
 	if err := db.ValidateUser(aa.User, tdb, cfg.LogError); err != nil {
+		if errors.Is(err, db.ErrMissingUser) {
+			cfg.LogError("No user specified")
+			return nil, &ActionError{err: db.ErrMissingUser}
+		}
+		if errors.Is(err, db.ErrUserNotRegistered) {
+			cfg.LogError("User is not registered in the game", "user", aa.User)
+			return nil, &ActionError{err: db.ErrUserNotRegistered}
+		}
 		return nil, err
 	}
 
@@ -154,7 +162,9 @@ func (aa *AttackAction) doNormalAttack(tdb *sql.DB, tx *sql.Tx, attackingTerrito
 		return nil, err
 	}
 	if attacking == 0 {
-		err = fmt.Errorf("no armies in %s controlled by %s to attack with", attackingTerritory.Name, aa.User)
+		err = &ActionError{
+			msg: fmt.Sprintf("no armies in %s controlled by %s to attack with", attackingTerritory.Name, aa.User),
+		}
 		cfg.LogError("No armies available to attack with", "user", aa.User, "defending", defendingTerritory.Name, "attacking", attackingTerritory.Name)
 		return nil, err
 	}
@@ -176,8 +186,11 @@ func (aa *AttackAction) doNormalAttack(tdb *sql.DB, tx *sql.Tx, attackingTerrito
 		cfg.LogError("Unable to get defending army size", "error", err)
 		return nil, err
 	}
+
 	if defending == 0 {
-		err = fmt.Errorf("no armies in %s", defendingTerritory.Name)
+		err = &ActionError{
+			msg: fmt.Sprintf("no armies in %s", defendingTerritory.Name),
+		}
 		cfg.LogError("No armies to attack in destination territory", "destination", defendingTerritory.Name)
 		return nil, err
 	}

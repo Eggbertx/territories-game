@@ -116,6 +116,35 @@ var (
 				assert.Equal(t, 0, nationCount, "expected Test User 2 to not have a nation due to occupation of CA by Test User 1")
 			},
 		},
+		{
+			desc: "invalid territory returns ActionError error",
+			events: []Action{
+				&JoinAction{
+					User:      "Test User 1",
+					Nation:    "Nation 1",
+					Territory: "XX",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				var actionErr *ActionError
+				assert.ErrorAs(t, err, &actionErr, "expected error to be of type ActionError")
+			},
+		},
+		{
+			desc: "no user, returns ActionError error",
+			events: []Action{
+				&JoinAction{
+					Nation:    "Nation 1",
+					Territory: "CA",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				var actionErr *ActionError
+				assert.ErrorAs(t, err, &actionErr, "expected error to be of type ActionError")
+			},
+		},
 	}
 	colorTestCases = []actionsTestCase{
 		{
@@ -167,6 +196,25 @@ var (
 			expectError: true,
 		},
 		{
+			desc: "reject missing color",
+			events: []Action{
+				&JoinAction{
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
+				},
+				&ColorAction{
+					User: "Test User",
+				},
+			},
+			expectError: true,
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				var actionErr *ActionError
+				assert.ErrorAs(t, err, &actionErr, "expected error to be of type ActionError")
+				assert.ErrorIs(t, err, ErrMissingColor)
+			},
+		},
+		{
 			desc: "don't allow changing someone else's color",
 			events: []Action{
 				&JoinAction{
@@ -180,6 +228,10 @@ var (
 				},
 			},
 			expectError: true,
+			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
+				var actionErr *ActionError
+				assert.ErrorAs(t, err, &actionErr, "expected error to be of type ActionError")
+			},
 		},
 		{
 			desc: "don't allow duplicate color",
@@ -208,6 +260,8 @@ var (
 				if err == nil {
 					t.FailNow()
 				}
+				var actionErr *ActionError
+				assert.ErrorAs(t, err, &actionErr, "expected error to be of type ActionError")
 				assert.ErrorIs(t, err, db.ErrColorInUse)
 
 				var color string
@@ -234,6 +288,10 @@ var (
 			expectError: true,
 			doValidateQueries: func(t *testing.T, d *sql.DB, err error) {
 				assert.ErrorIs(t, err, db.ErrUserNotRegistered)
+				var actionErr *ActionError
+				if !assert.ErrorAs(t, err, &actionErr, "expected error to be of type ActionError") {
+					t.FailNow()
+				}
 
 				var color string
 				err = d.QueryRow("SELECT color FROM nations WHERE player = 'Unregistered User'").Scan(&color)
@@ -781,6 +839,29 @@ var (
 				err = db.QueryRow("SELECT COUNT(*) FROM nations WHERE player = 'Test User'").Scan(&num)
 				assert.NoError(t, err)
 				assert.Equal(t, 0, num, "expected Test User to be eliminated")
+			},
+		},
+		{
+			desc: "invalid move returns ActionError error",
+			events: []Action{
+				&JoinAction{
+					User:      "Test User",
+					Nation:    "Nation 1",
+					Territory: "CA",
+				},
+				&MoveAction{
+					User:        "Test User",
+					Source:      "NV",
+					Destination: "CA",
+				},
+			},
+			expectError:           true,
+			minimumPlayersToStart: 1,
+			doValidateQueries: func(t *testing.T, db *sql.DB, err error) {
+				var actionErr *ActionError
+				if !assert.ErrorAs(t, err, &actionErr, "expected error to be of type ActionError") {
+					t.FailNow()
+				}
 			},
 		},
 	}

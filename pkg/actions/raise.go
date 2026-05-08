@@ -84,14 +84,14 @@ func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	var armySize int
 	if err = stmt.QueryRow(territory.Abbreviation, ra.User).Scan(&armySize); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			err = fmt.Errorf("no armies in %s controlled by %s to raise", territory.Name, ra.User)
+			err = &ActionError{msg: fmt.Sprintf("no armies in %s controlled by %s to raise", territory.Name, ra.User)}
 		}
 		cfg.LogError("Unable to check raise conditions", "error", err)
 		return nil, err
 	}
 
 	if armySize == cfg.MaxArmiesPerTerritory {
-		err = fmt.Errorf("cannot raise army size in %s: already at maximum of %d", territory.Name, cfg.MaxArmiesPerTerritory)
+		err = &ActionError{msg: fmt.Sprintf("cannot raise army size in %s: already at maximum of %d", territory.Name, cfg.MaxArmiesPerTerritory)}
 		cfg.LogError("Not enough actions remaining", "player", ra.User, "error", err)
 		return nil, err
 	}

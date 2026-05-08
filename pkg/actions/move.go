@@ -17,10 +17,10 @@ const (
 )
 
 var (
-	ErrInvalidMove             = errors.New("invalid move action format, expected 'move' or 'moveX' where X is the number of armies")
-	ErrMissingSourceTerritory  = errors.New("source territory not specified")
-	ErrMissingDestTerritory    = errors.New("destination territory not specified")
-	ErrSourceEqualsDestination = errors.New("source and destination territories cannot be the same")
+	ErrInvalidMove             = &ActionError{msg: "invalid move action format, expected 'move' or 'moveX' where X is the number of armies"}
+	ErrMissingSourceTerritory  = &ActionError{msg: "source territory not specified"}
+	ErrMissingDestTerritory    = &ActionError{msg: "destination territory not specified"}
+	ErrSourceEqualsDestination = &ActionError{msg: "source and destination territories cannot be the same"}
 )
 
 type MoveActionResult struct {
@@ -86,22 +86,22 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	sourceTerritory, err := cfg.ResolveTerritory(ma.Source)
 	if err != nil {
 		cfg.LogError("Unable to resolve source territory", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 	destTerritory, err := cfg.ResolveTerritory(ma.Destination)
 	if err != nil {
 		cfg.LogError("Unable to resolve destination territory", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 
 	isNeighboring, err := sourceTerritory.IsNeighboring(ma.Destination)
 	if err != nil {
 		cfg.LogError("Unable to check if territories are neighboring", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 
 	if !isNeighboring {
-		err = fmt.Errorf("cannot move from %s to %s: not a neighboring territory", sourceTerritory.Name, destTerritory.Name)
+		err = &ActionError{msg: fmt.Sprintf("cannot move from %s to %s: not a neighboring territory", sourceTerritory.Name, destTerritory.Name)}
 		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}
@@ -133,14 +133,14 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	err = stmt.QueryRow(sourceTerritory.Abbreviation).Scan(&armiesInSourceTerritory, &fromPlayer)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			err = fmt.Errorf("no armies in %s controlled by %s to move", sourceTerritory.Name, ma.User)
+			err = &ActionError{msg: fmt.Sprintf("no armies in %s controlled by %s to move", sourceTerritory.Name, ma.User)}
 		}
 		cfg.LogError("Unable to query source territory", "error", err)
 		return nil, err
 	}
 
 	if ma.Armies > 0 && ma.Armies > armiesInSourceTerritory {
-		err = fmt.Errorf("cannot move %d armies from %s: only %d available", ma.Armies, sourceTerritory.Name, armiesInSourceTerritory)
+		err = &ActionError{msg: fmt.Sprintf("cannot move %d armies from %s: only %d available", ma.Armies, sourceTerritory.Name, armiesInSourceTerritory)}
 		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 
 	if fromPlayer != ma.User {
-		err = fmt.Errorf("cannot move from %s: no armies controlled by player", sourceTerritory.Name)
+		err = &ActionError{msg: fmt.Sprintf("cannot move from %s: no armies controlled by player", sourceTerritory.Name)}
 		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 
 	if armiesInDestTerritory+ma.Armies > cfg.MaxArmiesPerTerritory {
-		err = fmt.Errorf("cannot move %d armies to %s: would exceed maximum of %d", ma.Armies, destTerritory.Name, cfg.MaxArmiesPerTerritory)
+		err = &ActionError{msg: fmt.Sprintf("cannot move %d armies to %s: would exceed maximum of %d", ma.Armies, destTerritory.Name, cfg.MaxArmiesPerTerritory)}
 		cfg.LogError("Unable to move armies", "error", err)
 		return nil, err
 	}

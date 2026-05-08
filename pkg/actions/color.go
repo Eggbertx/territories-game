@@ -8,12 +8,15 @@ import (
 
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
-	"github.com/mattn/go-sqlite3"
 	"github.com/mazznoer/csscolorparser"
 )
 
 const (
 	colorActionResultFmt = "%s changed their nation's color to %s"
+)
+
+var (
+	ErrMissingColor = &ActionError{msg: "no color specified"}
 )
 
 type ColorActionResult struct {
@@ -44,15 +47,29 @@ func (ca *ColorAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	if ca.Color == "" {
+		cfg.LogError("No color specified")
+		return nil, ErrMissingColor
+	}
 
 	if err = db.ValidateUser(ca.User, tdb, cfg.LogError); err != nil {
+		if errors.Is(err, db.ErrMissingUser) {
+			cfg.LogError("No user specified")
+			return nil, &ActionError{err: db.ErrMissingUser}
+		}
+		if errors.Is(err, db.ErrUserNotRegistered) {
+			cfg.LogError("User is not registered in the game", "user", ca.User)
+			return nil, &ActionError{err: db.ErrUserNotRegistered}
+		}
 		return nil, err
 	}
 
 	parsedColor, err := csscolorparser.Parse(ca.Color)
 	if err != nil {
 		cfg.LogError("Unable to parse color", "error", err)
-		return nil, err
+		return nil, &ActionError{
+			msg: err.Error(),
+		}
 	}
 	parsedColor.A = 1.0 // Ensure the color is fully opaque
 	ca.Color = strings.TrimPrefix(parsedColor.Clamp().HexString(), "#")
@@ -64,8 +81,8 @@ func (ca *ColorAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 	defer stmt.Close()
 	if _, err = stmt.Exec(ca.Color, ca.User); err != nil {
-		if sqlErr, ok := err.(sqlite3.Error); ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique) {
-			err = db.ErrColorInUse
+		if db.ErrorIsUniqueConstraintViolation(err) {
+			err = &ActionError{err: db.ErrColorInUse}
 		}
 		cfg.LogError("Unable to update nation color", "error", err)
 		return nil, err

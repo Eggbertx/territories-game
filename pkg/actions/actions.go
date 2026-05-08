@@ -2,16 +2,15 @@ package actions
 
 import (
 	"database/sql"
-	"errors"
 
 	"github.com/Eggbertx/territories-game/pkg/db"
 )
 
 var (
-	ErrInvalidAction            = errors.New(`action must be join, move, or attack`)
-	ErrNoTargetTerritory        = errors.New("missing target territory name or abbreviation")
-	ErrTerritoryAlreadyOccupied = errors.New("the territory is already occupied")
-	testInt                     int // for testing purposes, to avoid random number generation in tests
+	ErrInvalidAction            error = &ActionError{msg: `action must be join, move, or attack`}
+	ErrNoTargetTerritory        error = &ActionError{msg: "missing target territory name or abbreviation"}
+	ErrTerritoryAlreadyOccupied error = &ActionError{msg: "the territory is already occupied"}
+	testInt                     int   // for testing purposes, to avoid random number generation in tests
 	useTestInt                  bool
 )
 
