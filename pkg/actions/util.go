@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Eggbertx/territories-game/pkg/actions/turns"
 	"github.com/Eggbertx/territories-game/pkg/config"
 	"github.com/Eggbertx/territories-game/pkg/db"
-	"github.com/Eggbertx/territories-game/pkg/turns"
 )
 
 func randInt(max int) int {
