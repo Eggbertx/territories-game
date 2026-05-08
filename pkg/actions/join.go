@@ -61,6 +61,7 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		cfg.LogError("Unable to resolve territory", "error", err)
 		return nil, &ActionError{err: err}
 	}
+	ja.Territory = joinTerritory.Name
 
 	tx, err := tdb.Begin()
 	if err != nil {

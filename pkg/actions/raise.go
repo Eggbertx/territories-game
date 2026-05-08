@@ -73,6 +73,7 @@ func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		cfg.LogError("Unable to resolve territory", "error", err)
 		return nil, err
 	}
+	ra.Territory = territory.Name
 
 	stmt, err := tx.Prepare(`SELECT army_size FROM v_nation_holdings WHERE territory = ? and player = ?`)
 	if err != nil {

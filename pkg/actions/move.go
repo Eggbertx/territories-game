@@ -88,11 +88,14 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		cfg.LogError("Unable to resolve source territory", "error", err)
 		return nil, &ActionError{err: err}
 	}
+	ma.Source = sourceTerritory.Name
+
 	destTerritory, err := cfg.ResolveTerritory(ma.Destination)
 	if err != nil {
 		cfg.LogError("Unable to resolve destination territory", "error", err)
 		return nil, &ActionError{err: err}
 	}
+	ma.Destination = destTerritory.Name
 
 	isNeighboring, err := sourceTerritory.IsNeighboring(ma.Destination)
 	if err != nil {

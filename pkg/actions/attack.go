@@ -88,12 +88,14 @@ func (aa *AttackAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		cfg.LogError("Unable to resolve attacking territory", "error", err)
 		return nil, err
 	}
+	aa.AttackingTerritory = attackingTerritory.Name
 
 	defendingTerritory, err := cfg.ResolveTerritory(aa.DefendingTerritory)
 	if err != nil {
 		cfg.LogError("Unable to resolve defending territory", "error", err)
 		return nil, err
 	}
+	aa.DefendingTerritory = defendingTerritory.Name
 
 	if attackingTerritory.Abbreviation == defendingTerritory.Abbreviation {
 		err = fmt.Errorf("cannot attack %s from %s: friendly fire not allowed", defendingTerritory.Name, attackingTerritory.Name)
