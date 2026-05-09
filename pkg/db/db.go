@@ -77,8 +77,10 @@ func ErrorIsMissingSQLFunction(err error) bool {
 
 // ErrorIsUniqueConstraintViolation returns true if the given error was caused by inserting a duplicate value into a column with a unique constraint
 func ErrorIsUniqueConstraintViolation(err error) bool {
-	sqlErr, ok := err.(sqlite3.Error)
-	return ok && errors.Is(sqlErr.ExtendedCode, sqlite3.ErrConstraintUnique)
+	if sqlErr, ok := errors.AsType[*sqlite3.Error](err); ok {
+		return sqlErr.ExtendedCode == sqlite3.ErrConstraintUnique
+	}
+	return false
 }
 
 func CloseDB() error {

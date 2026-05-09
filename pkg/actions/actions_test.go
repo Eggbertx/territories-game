@@ -1023,3 +1023,74 @@ func TestAttackCalculation(t *testing.T) {
 		assert.Greater(t, failedAttacks, 0, "expected some attacks to fail")
 	}
 }
+
+func TestPlayerKODoesntStopGame(t *testing.T) {
+	// test that if a nation being eliminated puts the number of nations below the minimum required to start,
+	// the remaining players can still take actions
+	cfg, err := config.GetTestingConfig(t)
+	if !assert.NoError(t, err, "failed to get testing config") {
+		t.FailNow()
+	}
+	cfg.MinimumNationsToStart = 3
+	config.SetConfig(cfg)
+	assert.NoFileExists(t, cfg.DBFile, "expected no database file to exist before test")
+	d, err := db.GetDB()
+	if !assert.NoError(t, err, "failed to get test database") {
+		t.FailNow()
+	}
+	defer func() {
+		assert.NoError(t, db.CloseDB())
+		config.CloseTestingConfig(t)
+	}()
+
+	actions := []Action{
+		&JoinAction{
+			User:      "Test User 1",
+			Nation:    "Nation 1",
+			Territory: "CA",
+		},
+		&JoinAction{
+			User:      "Test User 2",
+			Nation:    "Nation 2",
+			Territory: "OR",
+		},
+		&JoinAction{
+			User:      "Test User 3",
+			Nation:    "Nation 3",
+			Territory: "NV",
+		},
+		&AttackAction{
+			User:               "Test User 1",
+			AttackingTerritory: "CA",
+			DefendingTerritory: "NV",
+		},
+		&MoveAction{
+			User:        "Test User 2",
+			Source:      "OR",
+			Destination: "NV",
+		},
+	}
+	for i, action := range actions {
+		if i >= 3 {
+			// setting testInt before this would cause unique constraint violations on random color generation for join actions
+			useTestInt = true
+			testInt = 20 // attacks succeed and no stalemate, ensuring unit loss
+		}
+		res, err := action.DoAction(d)
+		if !assert.NoError(t, err, "failed to do action %d", i) {
+			t.FailNow()
+		}
+		t.Log(res.String())
+		switch r := res.(type) {
+		case *AttackActionResult:
+			assert.NotZero(t, r.Losses)
+		case *MoveActionResult:
+			assert.Equal(t, "Test User 2", r.user)
+			action := *r.Action
+			assert.Equal(t, "Oregon", action.Source)
+			assert.Equal(t, "Nevada", action.Destination)
+			assert.Equal(t, 3, action.Armies)
+		}
+	}
+
+}

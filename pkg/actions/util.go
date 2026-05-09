@@ -42,6 +42,30 @@ func checkIfEnoughPlayersToStart(tx *sql.Tx, cfg *config.Config, logger config.L
 	}
 
 	if !enough {
+		const gameStartedQuery = `SELECT COUNT(*) FROM actions WHERE action_type NOT IN ('end_turn', 'join')`
+		var numActionsTaken int
+		var row *sql.Row
+		if tx != nil {
+			row = tx.QueryRow(gameStartedQuery)
+		} else {
+			db, err := db.GetDB()
+			if err != nil {
+				logger("Unable to get database connection", "error", err)
+				return err
+			}
+			row = db.QueryRow(gameStartedQuery)
+		}
+
+		if err = row.Scan(&numActionsTaken); err != nil {
+			logger("Unable to get number of actions taken", "error", err)
+			return err
+		}
+		if numActionsTaken > 0 {
+			// if this is reached, it can be assumed that a player was eliminated, putting the number of players below the minimum required,
+			// return no error so the game can continue
+			return nil
+		}
+
 		err = &ActionError{
 			msg: fmt.Sprintf("not enough players to start the game, minimum required: %d, currently joined: %d", cfg.MinimumNationsToStart, numPlayers),
 		}
