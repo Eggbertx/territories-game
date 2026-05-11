@@ -109,6 +109,15 @@ func (ma *MoveAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
+	if err = db.ValidateUser(ma.User, tdb, cfg.LogError); err != nil {
+		if errors.Is(err, db.ErrUserNotRegistered) {
+			cfg.LogError("User is not registered in the game", "user", ma.User)
+			return nil, &ActionError{err: err}
+		}
+		cfg.LogError("Unable to validate user", "error", err)
+		return nil, err
+	}
+
 	tx, err := tdb.Begin()
 	if err != nil {
 		cfg.LogError("Unable to begin transaction", "error", err)

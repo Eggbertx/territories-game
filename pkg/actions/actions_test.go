@@ -940,6 +940,7 @@ func TestJoinEvent(t *testing.T) {
 }
 
 func TestColorEvent(t *testing.T) {
+	useTestInt = false
 	for _, tc := range colorTestCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			runActionTestCase(t, &tc)
@@ -1075,6 +1076,8 @@ func TestPlayerKODoesntStopGame(t *testing.T) {
 			// setting testInt before this would cause unique constraint violations on random color generation for join actions
 			useTestInt = true
 			testInt = 20 // attacks succeed and no stalemate, ensuring unit loss
+		} else {
+			useTestInt = false
 		}
 		res, err := action.DoAction(d)
 		if !assert.NoError(t, err, "failed to do action %d", i) {

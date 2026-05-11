@@ -97,6 +97,11 @@ func (ja *JoinAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	}
 
 	if _, err = tx.Exec(nationAddSQL, ja.Nation, ja.User, randomColor()); err != nil {
+		if db.ErrorIsUniqueConstraintViolation(err) {
+			err = &ActionError{
+				msg: "territory is already occupied, player is already in the game, or the nation name is already taken",
+			}
+		}
 		cfg.LogError("Unable to add nation", "error", err)
 		return nil, err
 	}

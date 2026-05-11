@@ -51,12 +51,12 @@ func (ca *ColorAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		cfg.LogError("No color specified")
 		return nil, ErrMissingColor
 	}
+	if ca.User == "" {
+		cfg.LogError("No user specified")
+		return nil, &ActionError{err: db.ErrMissingUser}
+	}
 
 	if err = db.ValidateUser(ca.User, tdb, cfg.LogError); err != nil {
-		if errors.Is(err, db.ErrMissingUser) {
-			cfg.LogError("No user specified")
-			return nil, &ActionError{err: db.ErrMissingUser}
-		}
 		if errors.Is(err, db.ErrUserNotRegistered) {
 			cfg.LogError("User is not registered in the game", "user", ca.User)
 			return nil, &ActionError{err: db.ErrUserNotRegistered}

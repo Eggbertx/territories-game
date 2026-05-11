@@ -44,13 +44,18 @@ func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 		return nil, err
 	}
 
-	if err = db.ValidateUser(ra.User, tdb, cfg.LogError); err != nil {
-		return nil, err
-	}
-
 	if ra.Territory == "" {
 		cfg.LogError("No target territory specified")
 		return nil, ErrNoTargetTerritory
+	}
+
+	if err = db.ValidateUser(ra.User, tdb, cfg.LogError); err != nil {
+		if errors.Is(err, db.ErrUserNotRegistered) {
+			cfg.LogError("User is not registered in the game", "user", ra.User)
+			return nil, &ActionError{err: err}
+		}
+		cfg.LogError("Unable to validate user", "error", err)
+		return nil, err
 	}
 
 	tx, err := tdb.Begin()
