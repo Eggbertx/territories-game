@@ -86,33 +86,32 @@ func (aa *AttackAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	attackingTerritory, err := cfg.ResolveTerritory(aa.AttackingTerritory)
 	if err != nil {
 		cfg.LogError("Unable to resolve attacking territory", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 	aa.AttackingTerritory = attackingTerritory.Name
 
 	defendingTerritory, err := cfg.ResolveTerritory(aa.DefendingTerritory)
 	if err != nil {
 		cfg.LogError("Unable to resolve defending territory", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 	aa.DefendingTerritory = defendingTerritory.Name
 
 	if attackingTerritory.Abbreviation == defendingTerritory.Abbreviation {
-		err = fmt.Errorf("cannot attack %s from %s: friendly fire not allowed", defendingTerritory.Name, attackingTerritory.Name)
-		cfg.LogError(err.Error())
-		return nil, err
+		cfg.LogError("cannot attack territory: friendly fire not allowed", "defending", defendingTerritory.Name, "attacking", attackingTerritory.Name)
+		return nil, &ActionError{msg: fmt.Sprintf("cannot attack %s from %s: friendly fire not allowed", defendingTerritory.Name, attackingTerritory.Name)}
 	}
 
 	neighbors, err := attackingTerritory.IsNeighboring(aa.DefendingTerritory)
 	if err != nil {
 		cfg.LogError("Unable to check neighboring territories", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 	if !neighbors {
-		err = fmt.Errorf("cannot attack %s from %s: not a neighboring territory", defendingTerritory.Name, attackingTerritory.Name)
 		cfg.LogError("cannot attack territory (not neighboring)", "defending", defendingTerritory.Name, "attacking", attackingTerritory.Name)
-		return nil, err
+		return nil, &ActionError{msg: fmt.Sprintf("cannot attack %s from %s: not a neighboring territory", defendingTerritory.Name, attackingTerritory.Name)}
 	}
+
 	tx, err := tdb.Begin()
 	if err != nil {
 		cfg.LogError("Unable to begin transaction", "error", err)

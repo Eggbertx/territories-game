@@ -76,7 +76,7 @@ func (ra *RaiseAction) DoAction(tdb *sql.DB) (ActionResult, error) {
 	territory, err := cfg.ResolveTerritory(ra.Territory)
 	if err != nil {
 		cfg.LogError("Unable to resolve territory", "error", err)
-		return nil, err
+		return nil, &ActionError{err: err}
 	}
 	ra.Territory = territory.Name
 

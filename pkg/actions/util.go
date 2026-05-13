@@ -2,7 +2,6 @@ package actions
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -148,8 +147,4 @@ func (e *ActionError) Error() string {
 
 func (e *ActionError) Unwrap() error {
 	return e.err
-}
-
-func (e *ActionError) As(target any) bool {
-	return errors.As(e.err, target)
 }
